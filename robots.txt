@@ -1,0 +1,2 @@
+User-agent: *
+Sitemap: https://qsyqian.github.io/sitemap.xml

@@ -1,6 +1,11 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-  xmlns:xhtml="http://www.w3.org/1999/xhtml">
+<?xml-stylesheet type="text/xsl" href="https://qsyqian.github.io/sitemap.xsl"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  
+  <url>
+    <loc>https://qsyqian.github.io/</loc>
+    <lastmod>2019-08-12T19:27:46+08:00</lastmod>
+    <priority>0</priority>
+  </url>
   
   <url>
     <loc>https://qsyqian.github.io/post/</loc>
@@ -11,22 +16,22 @@
   <url>
     <loc>https://qsyqian.github.io/post/second/</loc>
     <lastmod>2019-08-12T19:27:46+08:00</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://qsyqian.github.io/</loc>
-    <lastmod>2019-08-12T19:27:46+08:00</lastmod>
-    <priority>0</priority>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
   </url>
   
   <url>
     <loc>https://qsyqian.github.io/post/first/</loc>
     <lastmod>2019-08-12T18:29:00+08:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
   </url>
   
   <url>
     <loc>https://qsyqian.github.io/about/</loc>
     <lastmod>2019-08-12T18:28:13+08:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
   </url>
   
   <url>

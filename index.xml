@@ -1,15 +1,14 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>Welcome!</title>
+    <title>Jane - A super concise theme for Hugo</title>
     <link>https://qsyqian.github.io/</link>
-    <description>Recent content on Welcome!</description>
+    <description>Recent content on Jane - A super concise theme for Hugo</description>
     <generator>Hugo -- gohugo.io</generator>
-    <language>fr-FR</language>
-    <copyright>All rights reserved - 2019</copyright>
+    <language>en</language>
     <lastBuildDate>Mon, 12 Aug 2019 19:27:46 +0800</lastBuildDate>
     
-	<atom:link href="https://qsyqian.github.io/index.xml" rel="self" type="application/rss+xml" />
+        <atom:link href="https://qsyqian.github.io/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
@@ -18,7 +17,12 @@
       <pubDate>Mon, 12 Aug 2019 19:27:46 +0800</pubDate>
       
       <guid>https://qsyqian.github.io/post/second/</guid>
-      <description> second </description>
+      
+        <description>
+
+&lt;h2 id=&#34;second&#34;&gt;second&lt;/h2&gt;
+</description>
+      
     </item>
     
     <item>
@@ -27,7 +31,18 @@
       <pubDate>Mon, 12 Aug 2019 18:29:00 +0800</pubDate>
       
       <guid>https://qsyqian.github.io/post/first/</guid>
-      <description> Hello Hugo  aaa bbb ccc  </description>
+      
+        <description>
+
+&lt;h3 id=&#34;hello-hugo&#34;&gt;Hello Hugo&lt;/h3&gt;
+
+&lt;ol&gt;
+&lt;li&gt;aaa&lt;/li&gt;
+&lt;li&gt;bbb&lt;/li&gt;
+&lt;li&gt;ccc&lt;/li&gt;
+&lt;/ol&gt;
+</description>
+      
     </item>
     
     <item>
@@ -36,7 +51,12 @@
       <pubDate>Mon, 12 Aug 2019 18:28:13 +0800</pubDate>
       
       <guid>https://qsyqian.github.io/about/</guid>
-      <description> About </description>
+      
+        <description>
+
+&lt;h2 id=&#34;about&#34;&gt;About&lt;/h2&gt;
+</description>
+      
     </item>
     
   </channel>
