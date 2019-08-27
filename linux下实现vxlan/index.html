@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en" itemscope itemtype="http://schema.org/WebPage">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>手动实现vxlan连接不同宿主机的容器 - Jane - A super concise theme for Hugo</title>
+  
+
+<meta name="renderer" content="webkit" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+<meta name="MobileOptimized" content="width"/>
+<meta name="HandheldFriendly" content="true"/>
+
+
+<meta name="applicable-device" content="pc,mobile">
+
+<meta name="theme-color" content="#f8f5ec" />
+<meta name="msapplication-navbutton-color" content="#f8f5ec">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="#f8f5ec">
+
+<meta name="mobile-web-app-capable" content="yes">
+
+<meta name="author" content="qsyqian" />
+  <meta name="description" content="在linux下实现vxlan网络 ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更" />
+
+  <meta name="keywords" content="Hugo, theme, jane" />
+
+
+
+
+
+
+<meta name="generator" content="Hugo 0.56.3" />
+
+
+<link rel="canonical" href="http://qsyqian.github.io/linux%E4%B8%8B%E5%AE%9E%E7%8E%B0vxlan/" />
+
+
+
+<link rel="icon" href="/favicon.ico" />
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/sass/jane.min.31c4b7729c8d71cc152f8de4203d90bfd8a04f7eab69372de7234ebf55b7701b.css" integrity="sha256-McS3cpyNccwVL43kID2Qv9igT36raTct5yNOv1W3cBs=" media="screen" crossorigin="anonymous">
+
+
+
+
+
+<meta property="og:title" content="手动实现vxlan连接不同宿主机的容器" />
+<meta property="og:description" content="在linux下实现vxlan网络 ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://qsyqian.github.io/linux%E4%B8%8B%E5%AE%9E%E7%8E%B0vxlan/" />
+<meta property="article:published_time" content="2019-08-26T16:51:45+08:00" />
+<meta property="article:modified_time" content="2019-08-26T16:51:45+08:00" />
+<meta itemprop="name" content="手动实现vxlan连接不同宿主机的容器">
+<meta itemprop="description" content="在linux下实现vxlan网络 ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更">
+
+
+<meta itemprop="datePublished" content="2019-08-26T16:51:45&#43;08:00" />
+<meta itemprop="dateModified" content="2019-08-26T16:51:45&#43;08:00" />
+<meta itemprop="wordCount" content="6767">
+
+
+
+<meta itemprop="keywords" content="" />
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="手动实现vxlan连接不同宿主机的容器"/>
+<meta name="twitter:description" content="在linux下实现vxlan网络 ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更"/>
+
+<!--[if lte IE 9]>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/classlist/1.1.20170427/classList.min.js"></script>
+<![endif]-->
+
+<!--[if lt IE 9]>
+  <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+<![endif]-->
+
+
+
+
+</head>
+<body>
+  <div id="mobile-navbar" class="mobile-navbar">
+  <div class="mobile-header-logo">
+    <a href="/" class="logo">Jane</a>
+  </div>
+  <div class="mobile-navbar-icon">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+</div>
+<nav id="mobile-menu" class="mobile-menu slideout-menu">
+  <ul class="mobile-menu-list">
+    <li class="mobile-menu-item">
+        
+          
+          
+            <a class="menu-item-link" href="http://qsyqian.github.io/">Home</a>
+          
+        
+      </li><li class="mobile-menu-item">
+        
+          
+          
+            <a class="menu-item-link" href="http://qsyqian.github.io/post/">Archives</a>
+          
+        
+      </li><li class="mobile-menu-item">
+        
+          
+          
+            <a class="menu-item-link" href="http://qsyqian.github.io/tags/">Tags</a>
+          
+        
+      </li><li class="mobile-menu-item">
+        
+          
+          
+            <a class="menu-item-link" href="http://qsyqian.github.io/categories/">Categories</a>
+          
+        
+      </li><li class="mobile-menu-item">
+        
+          
+          
+            <a class="menu-item-link" href="https://gohugo.io" rel="noopener" target="_blank">
+              external-link
+              
+              <i class="iconfont">
+                <svg class="icon" viewBox="0 0 1024 1024" version="1.1"
+  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="18" height="18">
+  <path d="M623.36 272.96 473.216 423.04C467.2 429.056 467.072 438.656 472.896 444.416c0 0-6.72-6.656 1.6 1.6C496.064 467.648 528.64 500.224 528.64 500.224 534.464 506.048 544 505.856 550.016 499.904l150.08-150.144 67.328 66.432c9.024 8.96 27.456 4.544 30.4-8.96 19.968-92.608 46.656-227.52 46.656-227.52 6.848-34.496-16.192-56.704-49.92-49.92 0 0-134.656 26.816-227.328 46.784C560.32 178.048 556.352 182.272 554.752 187.136c-3.2 6.208-3.008 14.208 3.776 20.992L623.36 272.96z"></path>
+  <path d="M841.152 457.152c-30.528 0-54.784 24.512-54.784 54.656l0 274.752L237.696 786.56 237.696 237.696l206.016 0c6.656 0 10.752 0 13.248 0C487.68 237.696 512 213.184 512 182.848 512 152.32 487.36 128 456.96 128L183.04 128C153.216 128 128 152.576 128 182.848c0 3.136 0.256 6.272 0.768 9.28C128.256 195.136 128 198.272 128 201.408l0 639.488c0 0.064 0 0.192 0 0.256 0 0.128 0 0.192 0 0.32 0 30.528 24.512 54.784 54.784 54.784l646.976 0c6.592 0 9.728 0 11.712 0 28.736 0 52.928-22.976 54.464-51.968C896 843.264 896 842.304 896 841.344l0-20.352L896 561.408 896 512.128C896 481.792 871.424 457.152 841.152 457.152z"></path>
+</svg>
+
+              </i>
+            </a>
+          
+        
+      </li>
+    
+
+    
+  </ul>
+</nav>
+
+
+  
+    
+
+
+
+
+
+
+  <link rel="stylesheet" href="/lib/photoswipe/photoswipe.min.css" />
+  <link rel="stylesheet" href="/lib/photoswipe/default-skin/default-skin.min.css" />
+
+
+
+
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+<div class="pswp__bg"></div>
+
+<div class="pswp__scroll-wrap">
+    
+    <div class="pswp__container">
+      <div class="pswp__item"></div>
+      <div class="pswp__item"></div>
+      <div class="pswp__item"></div>
+    </div>
+    
+    <div class="pswp__ui pswp__ui--hidden">
+    <div class="pswp__top-bar">
+      
+      <div class="pswp__counter"></div>
+      <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+      <button class="pswp__button pswp__button--share" title="Share"></button>
+      <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+      <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+      
+      
+      <div class="pswp__preloader">
+        <div class="pswp__preloader__icn">
+          <div class="pswp__preloader__cut">
+            <div class="pswp__preloader__donut"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+      <div class="pswp__share-tooltip"></div>
+    </div>
+    <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+    </button>
+    <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+    </button>
+    <div class="pswp__caption">
+      <div class="pswp__caption__center"></div>
+    </div>
+    </div>
+    </div>
+</div>
+
+  
+
+  
+
+  
+
+  <header id="header" class="header container">
+    <div class="logo-wrapper">
+  <a href="/" class="logo">
+    
+      Jane
+    
+  </a>
+</div>
+
+<nav class="site-navbar">
+  <ul id="menu" class="menu">
+    
+    
+        <li class="menu-item">
+        
+          
+          
+            <a class="menu-item-link" href="http://qsyqian.github.io/">Home</a>
+          
+
+        
+
+      </li>
+    
+        <li class="menu-item">
+        
+          
+          
+            <a class="menu-item-link" href="http://qsyqian.github.io/post/">Archives</a>
+          
+
+        
+
+      </li>
+    
+        <li class="menu-item">
+        
+          
+          
+            <a class="menu-item-link" href="http://qsyqian.github.io/tags/">Tags</a>
+          
+
+        
+
+      </li>
+    
+        <li class="menu-item">
+        
+          
+          
+            <a class="menu-item-link" href="http://qsyqian.github.io/categories/">Categories</a>
+          
+
+        
+
+      </li>
+    
+        <li class="menu-item">
+        
+          
+          
+            <a class="menu-item-link" href="https://gohugo.io" rel="noopener" target="_blank">
+              external-link
+              
+              <i class="iconfont">
+                <svg class="icon" viewBox="0 0 1024 1024" version="1.1"
+  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="18" height="18">
+  <path d="M623.36 272.96 473.216 423.04C467.2 429.056 467.072 438.656 472.896 444.416c0 0-6.72-6.656 1.6 1.6C496.064 467.648 528.64 500.224 528.64 500.224 534.464 506.048 544 505.856 550.016 499.904l150.08-150.144 67.328 66.432c9.024 8.96 27.456 4.544 30.4-8.96 19.968-92.608 46.656-227.52 46.656-227.52 6.848-34.496-16.192-56.704-49.92-49.92 0 0-134.656 26.816-227.328 46.784C560.32 178.048 556.352 182.272 554.752 187.136c-3.2 6.208-3.008 14.208 3.776 20.992L623.36 272.96z"></path>
+  <path d="M841.152 457.152c-30.528 0-54.784 24.512-54.784 54.656l0 274.752L237.696 786.56 237.696 237.696l206.016 0c6.656 0 10.752 0 13.248 0C487.68 237.696 512 213.184 512 182.848 512 152.32 487.36 128 456.96 128L183.04 128C153.216 128 128 152.576 128 182.848c0 3.136 0.256 6.272 0.768 9.28C128.256 195.136 128 198.272 128 201.408l0 639.488c0 0.064 0 0.192 0 0.256 0 0.128 0 0.192 0 0.32 0 30.528 24.512 54.784 54.784 54.784l646.976 0c6.592 0 9.728 0 11.712 0 28.736 0 52.928-22.976 54.464-51.968C896 843.264 896 842.304 896 841.344l0-20.352L896 561.408 896 512.128C896 481.792 871.424 457.152 841.152 457.152z"></path>
+</svg>
+
+              </i>
+            </a>
+          
+
+        
+
+      </li>
+    
+
+    
+    
+
+    
+  </ul>
+</nav>
+
+  </header>
+
+  <div id="mobile-panel">
+    <main id="main" class="main bg-llight">
+      <div class="content-wrapper">
+        <div id="content" class="content container">
+          <article class="post bg-white">
+  
+  <header class="post-header">
+    <h1 class="post-title">手动实现vxlan连接不同宿主机的容器</h1>
+    
+    <div class="post-meta">
+      <time datetime="2019-08-26" class="post-time">
+        2019-08-26
+      </time>
+    </div>
+  </header>
+
+  
+  
+<div class="post-toc" id="post-toc">
+  <h2 class="post-toc-title">Table of Contents</h2>
+  <div class="post-toc-content">
+    <nav id="TableOfContents">
+<ul>
+<li><a href="#在linux下实现vxlan网络">在linux下实现vxlan网络</a>
+<ul>
+<li><a href="#实验环境">实验环境</a></li>
+<li><a href="#实验">实验</a>
+<ul>
+<li><a href="#点对点的vxlan">点对点的vxlan</a></li>
+<li><a href="#多播模式的vxlan">多播模式的vxlan</a></li>
+<li><a href="#利用bridge接入容器">利用bridge接入容器</a></li>
+<li><a href="#手动维护-vtep-组">手动维护 vtep 组</a></li>
+<li><a href="#手动维护fdb表">手动维护fdb表</a></li>
+<li><a href="#手动维护arp表">手动维护arp表</a></li>
+<li><a href="#动态更新-arp-和-fdb-表项">动态更新 arp 和 fdb 表项</a></li>
+</ul></li>
+<li><a href="#总结">总结</a></li>
+</ul></li>
+</ul>
+</nav>
+  </div>
+</div>
+
+  
+  <div class="post-content">
+      
+
+<h1 id="在linux下实现vxlan网络">在linux下实现vxlan网络</h1>
+
+<p>​   本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更多关于vxlan协议的一些理论，包括产生的北京，报文的格式，请参考<a href="https://cizixs.com/2017/09/25/vxlan-protocol-introduction">vxlan 协议的介绍文章</a>。</p>
+
+<p>​   在下述内容中我们主要是在linux上模拟vxlan设备，实现docker跨主机的overlay网络。</p>
+
+<h2 id="实验环境">实验环境</h2>
+
+<p>本次实验我们使用两个linux机器，系统为centos7，IP信息如下：</p>
+
+<ul>
+<li>192.168.1.100</li>
+<li>192.168.1.200</li>
+</ul>
+
+<p>​   我们搭建的overlay网络的网段为172.55.1.0/24 。实验目的就是vxlan能够通过overlay IP互相连接。</p>
+
+<h2 id="实验">实验</h2>
+
+<h3 id="点对点的vxlan">点对点的vxlan</h3>
+
+<pre><code>先来搭建一个最简单的 vxlan 网络，两台机器构成一个 vxlan 网络，每台机器上有一个 vtep，vtep 通过它们的 IP 互相通信。这次实验完成后的网络结构如下图所示：
+</code></pre>
+
+<p><img src="./images/1566869818907.png" alt="1566869818907" /></p>
+
+<p>首先使用 <code>ip</code> 命令创建我们的 vxlan interface，在192.168.1.100上执行下述命令：</p>
+
+<p><code>ip link add vxlan1 type vxlan id 444 dstport 4789 remote 192.168.1.200 local 192.168.1.100 dev eth0</code></p>
+
+<p>大概解释下上述参数的含义：</p>
+
+<ul>
+<li>vxlan1：所创建的网络设备的名字</li>
+<li>type vxlan：所创建的网络设备的类型</li>
+<li>id 444：所创建vxlan VNI，这个值可以在 1 到 2^24 之间</li>
+<li>dstport 4789:vtep 通信的端口，linux 默认使用 8472（为了保持兼容，默认值一直没有更改），而 IANA 分配的端口是 4789，所以我们这里显式指定了它的值</li>
+<li>remote 192.168.1.200: 对方 vtep 的地址，类似于点对点协议</li>
+<li>local 192.168.1.100: 当前节点 vtep 要使用的 IP 地址</li>
+<li>dev eth0: 当节点用于 vtep 通信的网卡设备，用来读取 IP 地址。注意这个参数和 <code>local</code> 参数含义是相同的，在这里写出来是为了告诉大家有两个参数存在</li>
+</ul>
+
+<p>执行完之后会在宿主机上生成对应的网络设备，可以通过ip命令查看该网络设备的详情：</p>
+
+<pre><code class="language-shell"># ip -d link show dev vxlan1
+1044: vxlan1: &lt;BROADCAST,MULTICAST&gt; mtu 1400 qdisc noop state DOWN mode DEFAULT 
+    link/ether ba:08:0a:dd:3f:71 brd ff:ff:ff:ff:ff:ff promiscuity 0 
+    vxlan id 444 remote 192.168.1.200 local 192.168.1.100 dev eth0 srcport 0 0 dstport 4789 ageing 300 addrgenmode eui64
+</code></pre>
+
+<p>给vxlan1配置ip并启用：</p>
+
+<pre><code class="language-shell"># ip addr add 172.55.1.2/24 dev vxlan1
+# ip link set vxlan1 up
+# ifconfig vxlan1
+vxlan1: flags=4163&lt;UP,BROADCAST,RUNNING,MULTICAST&gt;  mtu 1400
+        inet 172.55.1.2  netmask 255.255.255.0  broadcast 0.0.0.0
+        inet6 fe80::b808:aff:fedd:3f71  prefixlen 64  scopeid 0x20&lt;link&gt;
+        ether ba:08:0a:dd:3f:71  txqueuelen 0  (Ethernet)
+        RX packets 0  bytes 0 (0.0 B)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 9  bytes 806 (806.0 B)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+</code></pre>
+
+<p>再次观察宿主机上几个点：</p>
+
+<ul>
+<li><p>路由变化</p>
+
+<pre><code class="language-shell"># ip r |grep vxlan1
+172.55.1.0/24 dev vxlan1  proto kernel  scope link  src 172.55.1.2 
+</code></pre></li>
+
+<li><p>vxlan fdb表变化</p>
+
+<pre><code class="language-shell"># bridge fdb| grep vxlan1
+00:00:00:00:00:00 dev vxlan1 dst 192.168.1.200 via eth0 self permanent
+</code></pre></li>
+</ul>
+
+<p>这个表项的意思是说，默认的而 vtep 对端地址为 <code>192.168.1.200</code>，换句话说，如果接收到的报文添加上 vxlan 头部之后都会发到 <code>192.168.1.200</code>。</p>
+
+<p>在另外一台虚拟机（<code>192.168.1.200</code>）上也进行相同的配置，要保证 VNI 也是 444，dstport 也是 4789，并修改 vtep 的地址和 remote IP 地址到相应的值。测试两台 vtep 的连通性：</p>
+
+<pre><code class="language-shell"># 在192.168.1.100上操作
+# ping -c 3 172.55.1.3
+PING 172.55.1.3 (172.55.1.3) 56(84) bytes of data.
+64 bytes from 172.55.1.3: icmp_seq=1 ttl=64 time=2.14 ms
+64 bytes from 172.55.1.3: icmp_seq=2 ttl=64 time=0.511 ms
+64 bytes from 172.55.1.3: icmp_seq=3 ttl=64 time=0.599 ms
+
+--- 172.55.1.3 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2001ms
+rtt min/avg/max/mdev = 0.511/1.083/2.140/0.748 ms
+</code></pre>
+
+<p>那么问题来了，这两个vxlan设备是可以正常通信，怎么证明其走的就是隧道网络呢？其实可以通过抓包来看包的头部包含哪些内容来判断。</p>
+
+<h3 id="多播模式的vxlan">多播模式的vxlan</h3>
+
+<p>​   上述实现了点对点的vxlan，其实没啥大用。因为一般集群不止两个节点，因此多播模式的vxlan需要研究一下。</p>
+
+<p>​   这个实验和前面一个非常相似，只不过主机之间不是点对点的连接，而是通过多播组成一个虚拟的整体。最终的网络架构也很相似（为了简单图中只有两个主机，但这个模型可以容纳多个主机组成 vxlan 网络）。</p>
+
+<p><img src="./images/1566870232376.png" alt="1566870232376" /></p>
+
+<p>​   同样的，先创建vxlan设备，命令如下：</p>
+
+<pre><code class="language-shell"># ip link add vxlan1 type vxlan id 444 dstport 4789 group 239.1.1.1  dev eth0
+# ip addr add 172.55.1.2/24 dev vxlan1
+# ip link set vxlan1 up
+</code></pre>
+
+<p>​   这个命令和上述点对点的vxlan设备创建命令相似，主要不同的是group，很容易理解，点对点的时候，只需要指明对端的地址就行。而在多播模式下，需要把不同的主机加到一个组（group）内，因此需要制定一个group address。关于多播的原理和使用不是这篇文章的重点，这里选择的多播 IP 地址也没有特殊的含义，关于多播的内容可以自行了解。</p>
+
+<p>​   上述命令运行完之后，在宿主机上路由不变，和点对点的一样：</p>
+
+<pre><code class="language-shell"># ip r | grep vxlan1                  
+172.55.1.0/24 dev vxlan1  proto kernel  scope link  src 172.55.1.2
+</code></pre>
+
+<p>​   不同的是bridge fdb信息：</p>
+
+<pre><code class="language-shell"># bridge fdb |grep vxlan1 
+00:00:00:00:00:00 dev vxlan1 dst 239.1.1.1 via eth0 self permanent
+</code></pre>
+
+<p>​   这里默认表项的 dst 字段的值变成了多播地址 <code>239.1.1.1</code>，而不是之前对方的 vtep 地址。同理给所有需要通信的节点进行上述配置，可以验证他们能通过 172.55..1.0/24 网络互相访问。</p>
+
+<p>​   我们来分析这个模式下 vxlan 通信的过程：</p>
+
+<p>​   在配置完成之后，所有linux机器的vtep 通过 IGMP 加入同一个多播网络 <code>239.1.1.1</code>。</p>
+
+<ol>
+<li>发送 ping 报文到 <code>172.55.1.3</code>，查看路由表，报文会从 vxlan1 发出去</li>
+<li>内核发现 vxlan1 的 IP 是 <code>172.55.1.2/24</code>，和目的 IP 在同一个网段，所以在同一个局域网，需要知道对方的 MAC 地址，因此会发送 ARP 报文查询</li>
+<li>ARP 报文源 MAC 地址为 vxlan1 的 MAC 地址，目的 MAC 地址为全 1 的广播地址</li>
+<li>vxlan 根据配置（VNI 444）添加上头部</li>
+<li>因为不知道对方 vtep 在哪台主机上，根据配置，vtep 会往多播地址 239.1.1.1 发送多播报文</li>
+<li>多播组中所有的主机都会受到这个报文，内核发现是 vxlan 报文，会根据 VNI 发送给对应的 vtep</li>
+<li>vtep 去掉 vxlan 头部，取出真正的 ARP 请求报文。同时 vtep 会记录 <code>&lt;源 MAC 地址 - vtep 所在主机 IP 地址&gt;</code> 信息到 fdb 表中</li>
+<li>如果发现 ARP 不是发送给自己的，直接丢弃；如果是发送给自己的，则生成 ARP 应答报文</li>
+<li>应答报文目的 MAC 地址是发送方 vtep 的 MAC 地址，而且 vtep 已经通过源报文学习到了 vtep 所在的主机，因此会直接单播发送给目的 vtep。因此 vtep 不需要多播，就能填充所有的头部信息</li>
+<li>应答报文通过 underlay 网络直接返回给发送方主机，发送方主机根据 VNI 把报文转发给 vtep，vtep 解包取出 ARP 应答报文，添加 arp 缓存到内核。并根据报文学习到目的 vtep 所在的主机地址，添加到 fdb 表中</li>
+<li>vtep 已经知道了通信需要的所有信息，后续 ICMP 的 ping 报文都是单播进行的。</li>
+</ol>
+
+<p>​   在这个过程中，在主机上抓包更容易看到通信的具体情况，下面是 ARP 请求报文的详情：</p>
+
+<p><img src="https://ws3.sinaimg.cn/large/006tKfTcgy1fjyb6b5ybdj30x20lq11q.jpg" alt="img" /></p>
+
+<p>可以看到 vxlan 报文可以分为三块：</p>
+
+<ul>
+<li>里层（图中最下面）是 overlay 网络中实体看到的报文（比如这里的 ARP 请求），它们和经典网络的通信报文没有任何区别，除了因为 MTU 导致有些报文比较小</li>
+<li>然后是 vxlan 头部，我们最关心的字段 VNI 确实是 444</li>
+<li>最外层（图中最上面）是 vtep 所在主机的通信报文头部。可以看到这里 IP 地址为多播 <code>239.1.1.1</code>，目的 MAC 地址也是多播对应的地址</li>
+</ul>
+
+<p>而 ARP 应答报文不是多播而是单播的事实也能看出来：</p>
+
+<p><img src="https://ws1.sinaimg.cn/large/006tKfTcgy1fjybddu0boj31kw11ekaq.jpg" alt="img" /></p>
+
+<p>从上面的通信过程，可以看出不少信息：</p>
+
+<ul>
+<li>多播其实就相当于 vtep 之间的广播，报文会发给所有的 vtep，但是只有一个会做出应答</li>
+<li>vtep 会通过接收到的报文学习 <code>MAC - VNI - Vtep IP</code> 的信息，减少后续不必要的多播报文</li>
+<li>对于 overlay 网络中的通信实体来说，整个通信过程对它们的透明的，它们认为自己的通信过程和经典网络没有区别</li>
+</ul>
+
+<p>通信结束之后，可以在主机上看到保存的 ARP 缓存：</p>
+
+<pre><code class="language-shell"># ip neigh |grep vxlan1
+172.55.1.2 dev vxlan1 lladdr 0a:86:31:3c:0d:6b STALE
+</code></pre>
+
+<p>另外查看bridge的fdb信息也有所变化：</p>
+
+<pre><code class="language-shell"># bridge fdb | grep vxlan1
+00:00:00:00:00:00 dev vxlan1 dst 239.1.1.1 via eth0 self permanent
+0a:86:31:3c:0d:6b dev vxlan1 dst 192.168.1.100 self 
+</code></pre>
+
+<p>可以看到，增加了一条点对点的信息。</p>
+
+<p>上述我们演示了点对点的vxlan，以及多播模式的vxlan，但是测试都是通过vtep设备的ip来进行通信的，下面使用linux bridge以及namespace来模拟docker跨宿主机之间使用overlay（vxlan）通信过程。</p>
+
+<h3 id="利用bridge接入容器">利用bridge接入容器</h3>
+
+<p>​   尽管上面的方法能够通过多播实现自动化的 overlay 网络构建，但是通信的双方只有 vtep，在实际的生产中，每台主机上都有几十台甚至上百台的虚拟机或者容器需要通信，因此我们需要找到一种方法能够把这些通信实体组织起来。</p>
+
+<p>​   在 linux 中把同一个网段的 interface 组织起来正是网桥（bridge，或者 switch，这两个名称等价）的功能，因此这部分我们介绍如何用网桥把多个虚拟机或者容器放到同一个 vxlan overlay 网络中。最终实现的网络架构如下图所示：</p>
+
+<p><img src="./images/1566871032525.png" alt="1566871032525" /></p>
+
+<p>​   因为创建虚拟机或者容器比较麻烦，我们用 network namespace 来模拟，从理论上它们是一样的。关于 network namespace 和 veth pair 的基础知识，请参考我<a href="https://cizixs.com/2017/02/10/network-virtualization-network-namespace">这篇文章</a>。</p>
+
+<p>​   对于每个容器/虚拟机，我们创建一个 network namespace，并通过一对 veth pair 把容器中的 eth0 网络连接到网桥上。同时 vtep 也会放到网桥上，以便能够对报文进行 vxlan 相关的处理。</p>
+
+<p>​   首先我们创建 vtep interface，使用的是多播模式：</p>
+
+<pre><code class="language-shell"># ip link add vxlan1 type vxlan \
+    id 444 \
+    dstport 4789 \
+    group 239.1.1.1 \
+    local 192.168.1.100 \
+    dev eth0
+</code></pre>
+
+<p>​   然后创建网桥 <code>br0</code>，把 vtep interface 绑定到上面：</p>
+
+<pre><code class="language-shell"># 创建名字为br0的网桥
+# ip link add br0 type bridge
+# 将vxlan设备vxlan1加到br0上
+# ip link set dev vxlan1 master br0
+# ip link set vxlan1 up
+# ip link set br0 up
+</code></pre>
+
+<p>​   下面使用network namespace来模拟container，利用veth pair设备将容器桥接到br0上：</p>
+
+<pre><code class="language-shell"># ip netns add container1
+
+# 创建 veth pair，并把一端加到网桥上
+# ip link add veth0 type veth peer name veth1
+# ip link set dev veth0 master br0
+# ip link set dev veth0 up
+
+# 配置容器内部的网络和 IP
+# ip link set dev veth1 netns container1
+# ip netns exec container1 ip link set lo up
+
+# ip netns exec container1 ip link set veth1 name eth0
+# ip netns exec container1 ip addr add 172.55.1.2/24 dev eth0
+# ip netns exec container1 ip link set eth0 up
+</code></pre>
+
+<p>​   这样子在主机10.104.109.48就设置好了vxlan设备和容器，可以查看具体的设备情况：</p>
+
+<pre><code class="language-shell"># brctl show br0
+bridge name     bridge id               STP enabled     interfaces
+br0             8000.0a86313c0d6b       no              veth0
+                                                        vxlan1
+
+# ifconfig vxlan1
+vxlan1: flags=4163&lt;UP,BROADCAST,RUNNING,MULTICAST&gt;  mtu 1400
+        inet6 fe80::886:31ff:fe3c:d6b  prefixlen 64  scopeid 0x20&lt;link&gt;
+        ether 0a:86:31:3c:0d:6b  txqueuelen 0  (Ethernet)
+        RX packets 13  bytes 732 (732.0 B)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 13  bytes 1122 (1.0 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+# ip netns exec container1 ip a
+1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN 
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+1042: eth0@if1043: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    link/ether c6:5d:76:b7:df:24 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 172.55.1.2/24 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::c45d:76ff:feb7:df24/64 scope link 
+       valid_lft forever preferred_lft forever
+# ip netns exec container1 ip r
+172.55.1.0/24 dev eth0  proto kernel  scope link  src 172.55.1.2
+</code></pre>
+
+<p>上述步骤在另外一台机器上执行，然后验证网络连通性：</p>
+
+<pre><code class="language-shell"># ip netns exec container1 ping -c 4 172.55.1.2
+PING 172.55.1.2 (172.55.1.2) 56(84) bytes of data.
+64 bytes from 172.55.1.2: icmp_seq=1 ttl=64 time=0.536 ms
+64 bytes from 172.55.1.2: icmp_seq=2 ttl=64 time=0.540 ms
+64 bytes from 172.55.1.2: icmp_seq=3 ttl=64 time=0.673 ms
+64 bytes from 172.55.1.2: icmp_seq=4 ttl=64 time=2.82 ms
+
+--- 172.55.1.2 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3000ms
+rtt min/avg/max/mdev = 0.536/1.142/2.820/0.970 ms
+</code></pre>
+
+<p>容器通信过程和前面的实验类似，只不过这里容器发出的 ARP 报文会被网桥转发给 <code>vxlan0</code>，然后 <code>vxlan0</code> 添加 vxlan 头部通过多播来找到对方的 MAC 地址。</p>
+
+<p>从逻辑上可以认为，在 <code>vxlan1</code> 的帮助下同一个 vxlan overlay 网络中的容器是连接到同一个网桥上的，示意图如下：</p>
+
+<p><img src="./images/1566871334979.png" alt="1566871334979" /></p>
+
+<p>多播实现很简单，不需要中心化的控制。但是不是所有的网络都支持多播，而且需要事先规划多播组和 VNI 的对应关系，在 overlay 网络数量比较多时也会很麻烦，多播也会导致大量的无用报文在网络中出现。现在很多云计算的网络都会通过自动化的方式来发现 vtep 和 MAC 信息，也就是自动构建 vxlan 网络。下面的几个部分，我们来解开自动化 vxlan 网络的秘密。</p>
+
+<h3 id="手动维护-vtep-组">手动维护 vtep 组</h3>
+
+<p>经过上面几个实验，我们来思考一下为什么要使用多播。因为对 overlay 网络来说，它的网段范围是分布在多个主机上的，因此传统 ARP 报文的广播无法直接使用。要想做到 overlay 网络的广播，必须把报文发送到所有 vtep 在的节点，这才引入了多播。</p>
+
+<p>如果有一种方法能够不通过多播，能把 overlay 的广播报文发送给所有的 vtep 主机的话，也能达到相同的功能。当然在维护 vtep 网络组之前，必须提前知道哪些 vtep 要组成一个网络，以及这些 vtep 在哪些主机上。</p>
+
+<p>Linux 的 vxlan 模块也提供了这个功能，而且实现起来并不复杂。创建 vtep interface 的时候不使用 <code>remote</code> 或者 <code>group</code> 参数就行：</p>
+
+<pre><code class="language-shell">$ ip link add vxlan0 type vxlan \
+    id 42 \
+    dstport 4789 \
+    dev eth0 
+</code></pre>
+
+<p>这个 vtep interface 创建的时候没有指定多播地址，当第一个 ARP 请求报文发送时它也不知道要发送给谁。但是我们可以手动添加默认的 FDB 表项，比如：</p>
+
+<pre><code class="language-shell">$ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 192.168.1.100
+$ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 192.168.1.200
+</code></pre>
+
+<p>这样的话，如果不知道对方 VTEP 的地址，就会往选择默认的表项，发到 <code>192.168.8.100</code> 和 <code>192.168.8.200</code>，相当于手动维护了一个 vtep 的多播组。</p>
+
+<p>在所有的节点的 vtep 上更新对应的 fdb 表项，就能实现 overlay 网络的连通。整个通信流程和多播模式相同，唯一的区别是，vtep 第一次会给所有的组内成员发送单播报文，当然也只有一个 vtep 会做出应答。</p>
+
+<p>使用一些自动化工具，定时更新 FDB 表项，就能动态地维护 VTEP 的拓扑结构。</p>
+
+<p>这个方案解决了在某些 underlay 网络中不能使用多播的问题，但是并没有解决多播的另外一个问题：每次要查找 MAC 地址要发送大量的无用报文，如果 vtep 组节点数量很大，那么每次查询都发送 N 个报文，其中只有一个报文真正有用。</p>
+
+<h3 id="手动维护fdb表">手动维护fdb表</h3>
+
+<p>如果提前知道目的容器 MAC 地址和它所在主机的 IP 地址，也可以通过更新 fdb 表项来减少广播的报文数量。</p>
+
+<p>创建 vtep 的命令：</p>
+
+<pre><code class="language-shell">$ ip link add vxlan0 type vxlan \
+    id 42 \
+    dstport 4789 \
+    dev eth0 \
+    nolearning
+</code></pre>
+
+<p>这次我们添加了 <code>nolearning</code> 参数，这个参数告诉 vtep 不要通过收到的报文来学习 fdb 表项的内容，因为我们会自动维护这个列表。</p>
+
+<p>然后可以添加 fdb 表项告诉 vtep 容器 MAC 对应的主机 IP 地址：</p>
+
+<pre><code class="language-shell">$ bridge fdb append 52:5e:55:58:9a:ab dev vxlan0 dst 192.168.1.100
+$ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 192.168.1.200
+</code></pre>
+
+<p>如果知道了对方的 MAC 地址，vtep 搜索 fdb 表项就知道应该发送到哪个对应的 vtep 了。需要注意是的，这个情况还是需要默认的表项（那些全零的表项），在不知道容器 IP 和 MAC 对应关系的时候通过默认方式发送 ARP 报文去查询对方的 MAC 地址。</p>
+
+<p>需要注意的是，和上一个方法相比，这个方法并没有任何效率上的改进，只是把自动学习 fdb 表项换成了手动维护（当然实际情况一般是自动化程序来维护），第一次发送 ARP 请求还是会往 vtep 组发送大量单播报文。</p>
+
+<p>当时这个方法给了我们很重要的提示：如果实现知道 vxlan 网络的信息，<strong>vtep 需要的信息都是可以自动维护的，而不需要学习</strong>。</p>
+
+<h3 id="手动维护arp表">手动维护arp表</h3>
+
+<p>除了维护 fdb 表，arp 表也是可以维护的。如果能通过某个方式知道容器的 IP 和 MAC 地址对应关系，只要更新到每个节点，就能实现网络的连通。</p>
+
+<p>但是这里有个问题，我们需要维护的是每个容器里面的 ARP 表项，因为最终通信的双方是容器。到每个容器里面（所有的 network namespace）去更新对应的 ARP 表，是件工作量很大的事情，而且容器的创建和删除还是动态的，。linux 提供了一个解决方案，vtep 可以作为 arp 代理，回复 arp 请求，也就是说只要 vtep interface 知道对应的 <code>IP - MAC</code> 关系，在接收到容器发来的 ARP 请求时可以直接作出应答。这样的话，我们只需要更新 vtep interface 上 ARP 表项就行了。</p>
+
+<p>创建 vtep interface 需要加上 <code>proxy</code> 参数：</p>
+
+<pre><code class="language-shell">$ ip link add vxlan0 type vxlan \
+    id 42 \
+    dstport 4789 \
+    dev eth0 \
+    nolearning \
+    proxy
+</code></pre>
+
+<p>这条命令和上部分相比多了 <code>proxy</code> 参数，这个参数告诉 vtep 承担 ARP 代理的功能。如果收到 ARP 请求，并且自己知道结果就直接作出应答。</p>
+
+<p>当然我们还是要手动更新 fdb 表项来构建 vtep 组，</p>
+
+<pre><code class="language-shell">$ bridge fdb append 52:5e:55:58:9a:ab dev vxlan0 dst 192.168.1.100
+$ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 192.168.1.200
+</code></pre>
+
+<p>然后，还需要为 vtep 添加 arp 表项，所有要通信容器的 <code>IP - MAC</code>二元组都要加进去。</p>
+
+<pre><code class="language-shell">$ ip neigh add 172.55.1.2 lladdr d6:d9:cd:0a:a4:28 dev vxlan0
+$ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
+</code></pre>
+
+<p>在要通信的所有节点配置完之后，容器就能互相 ping 通。当容器要访问彼此，并且第一次发送 ARP 请求时，这个请求并不会发给所有的 vtep，而是当前由当前 vtep 做出应答，大大减少了网络上的报文。</p>
+
+<p>借助自动化的工具做到实时的表项（fdb 和 arp）更新，这种方法就能很高效地实现 overlay 网络的通信。</p>
+
+<h3 id="动态更新-arp-和-fdb-表项">动态更新 arp 和 fdb 表项</h3>
+
+<p>尽管前一种方法通过动态更新 fdb 和 arp 表避免多余的网络报文，但是还有一个的问题：为了能够让所有的容器正常工作，所有可能会通信的容器都必须提前添加到 ARP 和 fdb 表项中。但并不是网络上所有的容器都会互相通信，所以<strong>添加的有些表项（尤其是 ARP 表项）是用不到的</strong>。</p>
+
+<p>Linux 提供了另外一种方法，内核能够动态地通知节点要和哪个容器通信，应用程序可以订阅这些事件，如果内核发现需要的 ARP 或者 fdb 表项不存在，会发送事件给订阅的应用程序，这样应用程序从中心化的控制拿到这些信息来更新表项，做到更精确的控制。</p>
+
+<p>要收到 L2（fdb）miss，必须要满足几个条件：</p>
+
+<ul>
+<li>目的 MAC 地址未知，也就是没有对应的 fdb 表项</li>
+<li>fdb 中没有全零的表项，也就是说默认规则</li>
+<li>目的 MAC 地址不是多播或者广播地址</li>
+</ul>
+
+<p>要实现这种功能，创建 vtep 的时候需要加上额外的参数：</p>
+
+<pre><code class="language-shell">$ ip link add vxlan0 type vxlan \
+    id 42 \
+    dstport 4789 \
+    dev eth0 \
+    nolearning \
+    proxy \
+    l2miss \
+    l3miss
+</code></pre>
+
+<p>这次多了两个参数 <code>l2miss</code> 和 <code>l3miss</code>：</p>
+
+<ul>
+<li><code>l2miss</code>：如果设备找不到 MAC 地址需要的 vtep 地址，就发送通知事件</li>
+<li><code>l3miss</code>：如果设备找不到需要 IP 对应的 MAC 地址，就发送通知事件</li>
+</ul>
+
+<p><code>ip monitor</code> 命令能做到这点，监听某个 interface 的事件，具体用法请参考 man 手册.</p>
+
+<p><code># ip monitor all dev vxlan0</code></p>
+
+<p>如果从本节点容器 ping 另外一个节点的容器，就先发生 l3 miss，这是 l3miss 的通知事件，：</p>
+
+<pre><code class="language-shell"># ip monitor all dev vxlan0
+[nsid current]miss 172.55.1.3  STALE
+</code></pre>
+
+<p><code>l3miss</code> 是说这个 IP 地址，vtep 不知道它对应的 MAC 地址，因此要手动添加 arp 记录：</p>
+
+<pre><code class="language-shell">$ ip neigh replace 172.55.1.3 \
+    lladdr b2:ee:aa:42:8b:0b \
+    dev vxlan0 \
+    nud reachable
+</code></pre>
+
+<p>上面这条命令设置的 <code>nud reachable</code> 参数意思是，这条记录有一个超时时间，系统发现它无效一段时间会自动删除。这样的好处是，不需要手动去删除它，删除后需要通信内核会再次发送通知事件。 <code>nud</code> 是 <code>Neighbour Unreachability Detection</code> 的缩写， 当然根据需要这个参数也可以设置成其他值，比如 <code>permanent</code>，表示这个记录永远不会过时，系统不会检查它是否正确，也不会删除它，只有管理员也能对它进行修改。</p>
+
+<p>这时候还是不能正常通信，接着会出现 l2miss 的通知事件：</p>
+
+<pre><code class="language-shell"># ip monitor all dev vxlan0
+[nsid current]miss lladdr b2:ee:aa:42:8b:0b STALE
+</code></pre>
+
+<p>类似的，这个事件是说不知道这个容器的 MAC 地址在哪个节点上，所以要手动添加 fdb 记录：</p>
+
+<pre><code class="language-shell"># bridge fdb add b2:ee:aa:42:8b:0b dst 192.168.8.101 dev vxlan0
+</code></pre>
+
+<p>在通信的另一台机器上执行响应的操作，就会发现两者能 ping 通了。</p>
+
+<h2 id="总结">总结</h2>
+
+<p>上面提出的所有方案中，其中手动的部分都可以使用程序来自动完成，需要的信息一般都是从集中式的控制中心获取的，这也是大多数基于 vxlan 的 SDN 网络的大致架构。当然具体的实现不一定和某种方法相同，可能是上述方法的变形或者组合，但是设计思想都是一样的。</p>
+
+<p>虽然上述的实验中，为了简化图中只有两台主机，而且只有一个 vxlan 网络，但是利用相同的操作很容易创建另外一个 vxlan 网络（必须要保证 vtep 的 VNI 值不同，如果使用多播，也要保证多播 IP 不同），如下图所示：</p>
+
+<p><img src="./images/1566871782602.png" alt="1566871782602" /></p>
+
+<p>主机会根据 VNI 来区别不同的 vxlan 网络，不同的 vxlan 网络之间不会相互影响。如果再加上 network namespace，就能实现更复杂的网络结构。</p>
+
+  </div>
+
+  
+  
+<div class="post-copyright">
+  <p class="copyright-item">
+    <span class="item-title">Author</span>
+    <span class="item-content">qsyqian</span>
+  </p>
+  <p class="copyright-item">
+    <span class="item-title">LastMod</span>
+    <span class="item-content">
+      2019-08-26
+      
+    </span>
+  </p>
+  
+  <p class="copyright-item">
+    <span class="item-title">License</span>
+    <span class="item-content"><a rel="license noopener" href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank">CC BY-NC-ND 4.0</a></span>
+  </p>
+</div>
+
+
+  
+  
+</article>
+
+
+
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+    
+
+        </div>
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="icon-links">
+  
+  
+    <a href="qsyqian@gmail.com" rel="me noopener" class="iconfont"
+      title="email"  target="_blank"
+      >
+      <svg class="icon" viewBox="0 0 1451 1024" version="1.1"
+  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="36" height="36">
+  <path d="M664.781909 681.472759 0 97.881301C0 3.997201 71.046997 0 71.046997 0L474.477909 0 961.649408 0 1361.641813 0C1361.641813 0 1432.688811 3.997201 1432.688811 97.881301L771.345323 681.472759C771.345323 681.472759 764.482731 685.154773 753.594283 688.65053L753.594283 688.664858C741.602731 693.493018 729.424896 695.068979 718.077952 694.839748 706.731093 695.068979 694.553173 693.493018 682.561621 688.664858L682.561621 688.65053C671.644501 685.140446 664.781909 681.472759 664.781909 681.472759L664.781909 681.472759ZM718.063616 811.603883C693.779541 811.016482 658.879232 802.205449 619.10784 767.734955 542.989056 701.759633 0 212.052267 0 212.052267L0 942.809523C0 942.809523 0 1024 83.726336 1024L682.532949 1024 753.579947 1024 1348.948139 1024C1432.688811 1024 1432.688811 942.809523 1432.688811 942.809523L1432.688811 212.052267C1432.688811 212.052267 893.138176 701.759633 817.019477 767.734955 777.248 802.205449 742.347691 811.03081 718.063616 811.603883L718.063616 811.603883Z"></path>
+</svg>
+
+    </a>
+  
+    <a href="http://github.com/qsyqian" rel="me noopener" class="iconfont"
+      title="github"  target="_blank"
+      >
+      <svg class="icon" style="" viewBox="0 0 1024 1024" version="1.1"
+  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="36" height="36">
+  <path d="M512 12.672c-282.88 0-512 229.248-512 512 0 226.261333 146.688 418.133333 350.08 485.76 25.6 4.821333 34.986667-11.008 34.986667-24.618667 0-12.16-0.426667-44.373333-0.64-87.04-142.421333 30.890667-172.458667-68.693333-172.458667-68.693333C188.672 770.986667 155.008 755.2 155.008 755.2c-46.378667-31.744 3.584-31.104 3.584-31.104 51.413333 3.584 78.421333 52.736 78.421333 52.736 45.653333 78.293333 119.850667 55.68 149.12 42.581333 4.608-33.109333 17.792-55.68 32.426667-68.48-113.706667-12.8-233.216-56.832-233.216-253.013333 0-55.893333 19.84-101.546667 52.693333-137.386667-5.76-12.928-23.04-64.981333 4.48-135.509333 0 0 42.88-13.738667 140.8 52.48 40.96-11.392 84.48-17.024 128-17.28 43.52 0.256 87.04 5.888 128 17.28 97.28-66.218667 140.16-52.48 140.16-52.48 27.52 70.528 10.24 122.581333 5.12 135.509333 32.64 35.84 52.48 81.493333 52.48 137.386667 0 196.693333-119.68 240-233.6 252.586667 17.92 15.36 34.56 46.762667 34.56 94.72 0 68.522667-0.64 123.562667-0.64 140.202666 0 13.44 8.96 29.44 35.2 24.32C877.44 942.592 1024 750.592 1024 524.672c0-282.752-229.248-512-512-512"></path>
+</svg>
+
+    </a>
+
+
+<a href="http://qsyqian.github.io/index.xml" rel="noopener alternate" type="application/rss&#43;xml"
+    class="iconfont" title="rss" target="_blank">
+    <svg class="icon" viewBox="0 0 1024 1024" version="1.1"
+  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="30" height="30">
+  <path d="M819.157333 1024C819.157333 574.592 449.408 204.8 0 204.8V0c561.706667 0 1024 462.293333 1024 1024h-204.842667zM140.416 743.04a140.8 140.8 0 0 1 140.501333 140.586667A140.928 140.928 0 0 1 140.074667 1024C62.72 1024 0 961.109333 0 883.626667s62.933333-140.544 140.416-140.586667zM678.784 1024h-199.04c0-263.210667-216.533333-479.786667-479.744-479.786667V345.173333c372.352 0 678.784 306.517333 678.784 678.826667z"></path>
+</svg>
+
+  </a>
+   
+</div>
+
+<div class="copyright">
+  <span class="power-by">
+    Powered by <a class="hexo-link" href="https://gohugo.io">Hugo</a>
+  </span>
+  <span class="division">|</span>
+  <span class="theme-info">
+    Theme - <a class="theme-link" href="https://github.com/xianmin/hugo-theme-jane">Jane</a>
+  </span>
+
+  <span class="copyright-year">
+    &copy;
+    
+      2019.08.14 -
+    2019
+    <span class="heart">
+      
+      <i class="iconfont">
+        <svg class="icon" viewBox="0 0 1025 1024" version="1.1"
+  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="14" height="14">
+  <path d="M1000.1 247.9c-15.5-37.3-37.6-70.6-65.7-98.9-54.4-54.8-125.8-85-201-85-85.7 0-166 39-221.4 107.4C456.6 103 376.3 64 290.6 64c-75.1 0-146.5 30.4-201.1 85.6-28.2 28.5-50.4 61.9-65.8 99.3-16 38.8-24 79.9-23.6 122.2 0.7 91.7 40.1 177.2 108.1 234.8 3.1 2.6 6 5.1 8.9 7.8 14.9 13.4 58 52.8 112.6 102.7 93.5 85.5 209.9 191.9 257.5 234.2 7 6.1 15.8 9.5 24.9 9.5 9.2 0 18.1-3.4 24.9-9.5 34.5-30.7 105.8-95.9 181.4-165 74.2-67.8 150.9-138 195.8-178.2 69.5-57.9 109.6-144.4 109.9-237.3 0.1-42.5-8-83.6-24-122.2z"
+   fill="#8a8a8a"></path>
+</svg>
+
+      </i>
+    </span><span class="author">
+        qsyqian
+        
+      </span></span>
+
+  
+  
+
+  
+</div>
+
+    </footer>
+
+    <div class="back-to-top" id="back-to-top">
+      <i class="iconfont">
+        
+        <svg class="icon" viewBox="0 0 1024 1024" version="1.1"
+  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="35" height="35">
+  <path d="M510.866688 227.694839 95.449397 629.218702l235.761562 0-2.057869 328.796468 362.40389 0L691.55698 628.188232l241.942331-3.089361L510.866688 227.694839zM63.840492 63.962777l894.052392 0 0 131.813095L63.840492 195.775872 63.840492 63.962777 63.840492 63.962777zM63.840492 63.962777"></path>
+</svg>
+
+      </i>
+    </div>
+  </div>
+  
+<script type="text/javascript" src="/lib/jquery/jquery-3.2.1.min.js"></script>
+  <script type="text/javascript" src="/lib/slideout/slideout-1.0.1.min.js"></script>
+
+
+
+
+<script type="text/javascript" src="/js/main.dee43230127a73d039a734510fa896c89c3c7ce0cf0be0c7a7433f8fd69b76dc.js" integrity="sha256-3uQyMBJ6c9A5pzRRD6iWyJw8fODPC&#43;DHp0M/j9abdtw=" crossorigin="anonymous"></script>
+
+
+
+
+
+
+  
+    <script type="text/javascript" src="/js/load-photoswipe.js"></script>
+    <script type="text/javascript" src="/lib/photoswipe/photoswipe.min.js"></script>
+    <script type="text/javascript" src="/lib/photoswipe/photoswipe-ui-default.min.js"></script>
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</body>
+</html>
