@@ -6,21 +6,21 @@
     <description>Recent content on Jane - A super concise theme for Hugo</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Mon, 26 Aug 2019 16:51:45 +0800</lastBuildDate>
+    <lastBuildDate>Tue, 27 Aug 2019 10:57:51 +0800</lastBuildDate>
     
         <atom:link href="http://qsyqian.github.io/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
-      <title>手动实现vxlan连接不同宿主机的容器</title>
-      <link>http://qsyqian.github.io/%E6%89%8B%E5%8A%A8%E5%AE%9E%E7%8E%B0vxlan%E8%BF%9E%E6%8E%A5%E8%B7%A8%E5%AE%BF%E4%B8%BB%E6%9C%BA%E5%AE%B9%E5%99%A8/</link>
-      <pubDate>Mon, 26 Aug 2019 16:51:45 +0800</pubDate>
+      <title>手动创建vxlan网络连接container</title>
+      <link>http://qsyqian.github.io/post/network/linux-vxlan-implement/</link>
+      <pubDate>Tue, 27 Aug 2019 10:57:51 +0800</pubDate>
       
-      <guid>http://qsyqian.github.io/%E6%89%8B%E5%8A%A8%E5%AE%9E%E7%8E%B0vxlan%E8%BF%9E%E6%8E%A5%E8%B7%A8%E5%AE%BF%E4%B8%BB%E6%9C%BA%E5%AE%B9%E5%99%A8/</guid>
+      <guid>http://qsyqian.github.io/post/network/linux-vxlan-implement/</guid>
       
         <description>
 
-&lt;h1 id=&#34;在linux下实现vxlan网络&#34;&gt;在linux下实现vxlan网络&lt;/h1&gt;
+&lt;h1 id=&#34;手动创建vxlan网络连接container&#34;&gt;手动创建vxlan网络连接container&lt;/h1&gt;
 
 &lt;p&gt;​   本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更多关于vxlan协议的一些理论，包括产生的北京，报文的格式，请参考&lt;a href=&#34;https://cizixs.com/2017/09/25/vxlan-protocol-introduction&#34;&gt;vxlan 协议的介绍文章&lt;/a&gt;。&lt;/p&gt;
 
@@ -331,6 +331,7 @@ rtt min/avg/max/mdev = 0.536/1.142/2.820/0.970 ms
 
 &lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;$ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 192.168.1.100
 $ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 192.168.1.200
+
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;这样的话，如果不知道对方 VTEP 的地址，就会往选择默认的表项，发到 &lt;code&gt;192.168.8.100&lt;/code&gt; 和 &lt;code&gt;192.168.8.200&lt;/code&gt;，相当于手动维护了一个 vtep 的多播组。&lt;/p&gt;
@@ -352,6 +353,7 @@ $ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 192.168.1.200
     dstport 4789 \
     dev eth0 \
     nolearning
+
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;这次我们添加了 &lt;code&gt;nolearning&lt;/code&gt; 参数，这个参数告诉 vtep 不要通过收到的报文来学习 fdb 表项的内容，因为我们会自动维护这个列表。&lt;/p&gt;
@@ -360,6 +362,7 @@ $ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 192.168.1.200
 
 &lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;$ bridge fdb append 52:5e:55:58:9a:ab dev vxlan0 dst 192.168.1.100
 $ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 192.168.1.200
+
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;如果知道了对方的 MAC 地址，vtep 搜索 fdb 表项就知道应该发送到哪个对应的 vtep 了。需要注意是的，这个情况还是需要默认的表项（那些全零的表项），在不知道容器 IP 和 MAC 对应关系的时候通过默认方式发送 ARP 报文去查询对方的 MAC 地址。&lt;/p&gt;
@@ -382,6 +385,7 @@ $ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 192.168.1.200
     dev eth0 \
     nolearning \
     proxy
+
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;这条命令和上部分相比多了 &lt;code&gt;proxy&lt;/code&gt; 参数，这个参数告诉 vtep 承担 ARP 代理的功能。如果收到 ARP 请求，并且自己知道结果就直接作出应答。&lt;/p&gt;
@@ -390,12 +394,14 @@ $ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 192.168.1.200
 
 &lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;$ bridge fdb append 52:5e:55:58:9a:ab dev vxlan0 dst 192.168.1.100
 $ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 192.168.1.200
+
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;然后，还需要为 vtep 添加 arp 表项，所有要通信容器的 &lt;code&gt;IP - MAC&lt;/code&gt;二元组都要加进去。&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;$ ip neigh add 172.55.1.2 lladdr d6:d9:cd:0a:a4:28 dev vxlan0
 $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
+
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;在要通信的所有节点配置完之后，容器就能互相 ping 通。当容器要访问彼此，并且第一次发送 ARP 请求时，这个请求并不会发给所有的 vtep，而是当前由当前 vtep 做出应答，大大减少了网络上的报文。&lt;/p&gt;
@@ -426,6 +432,7 @@ $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
     proxy \
     l2miss \
     l3miss
+
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;这次多了两个参数 &lt;code&gt;l2miss&lt;/code&gt; 和 &lt;code&gt;l3miss&lt;/code&gt;：&lt;/p&gt;
@@ -443,6 +450,7 @@ $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
 
 &lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# ip monitor all dev vxlan0
 [nsid current]miss 172.55.1.3  STALE
+
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;&lt;code&gt;l3miss&lt;/code&gt; 是说这个 IP 地址，vtep 不知道它对应的 MAC 地址，因此要手动添加 arp 记录：&lt;/p&gt;
@@ -451,6 +459,7 @@ $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
     lladdr b2:ee:aa:42:8b:0b \
     dev vxlan0 \
     nud reachable
+
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;上面这条命令设置的 &lt;code&gt;nud reachable&lt;/code&gt; 参数意思是，这条记录有一个超时时间，系统发现它无效一段时间会自动删除。这样的好处是，不需要手动去删除它，删除后需要通信内核会再次发送通知事件。 &lt;code&gt;nud&lt;/code&gt; 是 &lt;code&gt;Neighbour Unreachability Detection&lt;/code&gt; 的缩写， 当然根据需要这个参数也可以设置成其他值，比如 &lt;code&gt;permanent&lt;/code&gt;，表示这个记录永远不会过时，系统不会检查它是否正确，也不会删除它，只有管理员也能对它进行修改。&lt;/p&gt;
@@ -459,11 +468,13 @@ $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
 
 &lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# ip monitor all dev vxlan0
 [nsid current]miss lladdr b2:ee:aa:42:8b:0b STALE
+
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;类似的，这个事件是说不知道这个容器的 MAC 地址在哪个节点上，所以要手动添加 fdb 记录：&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# bridge fdb add b2:ee:aa:42:8b:0b dst 192.168.8.101 dev vxlan0
+
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;p&gt;在通信的另一台机器上执行响应的操作，就会发现两者能 ping 通了。&lt;/p&gt;
