@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>Network 1 - Jane - A super concise theme for Hugo</title>
+  <title>手动实现vxlan连接不同宿主机的容器 - Jane - A super concise theme for Hugo</title>
   
 
 <meta name="renderer" content="webkit" />
@@ -35,7 +35,7 @@
 <meta name="generator" content="Hugo 0.56.3" />
 
 
-<link rel="canonical" href="http://qsyqian.github.io/%E6%89%8B%E5%8A%A8%E5%AE%9E%E7%8E%B0vxlan%E8%BF%9E%E6%8E%A5%E4%B8%8D%E5%90%8C%E5%AE%BF%E4%B8%BB%E6%9C%BA%E5%AE%B9%E5%99%A8/" />
+<link rel="canonical" href="http://qsyqian.github.io/%E6%89%8B%E5%8A%A8%E5%AE%9E%E7%8E%B0vxlan%E8%BF%9E%E6%8E%A5%E8%B7%A8%E5%AE%BF%E4%B8%BB%E6%9C%BA%E5%AE%B9%E5%99%A8/" />
 
 
 
@@ -57,25 +57,25 @@
 
 
 
-<meta property="og:title" content="Network 1" />
+<meta property="og:title" content="手动实现vxlan连接不同宿主机的容器" />
 <meta property="og:description" content="在linux下实现vxlan网络 ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更" />
 <meta property="og:type" content="article" />
-<meta property="og:url" content="http://qsyqian.github.io/%E6%89%8B%E5%8A%A8%E5%AE%9E%E7%8E%B0vxlan%E8%BF%9E%E6%8E%A5%E4%B8%8D%E5%90%8C%E5%AE%BF%E4%B8%BB%E6%9C%BA%E5%AE%B9%E5%99%A8/" />
+<meta property="og:url" content="http://qsyqian.github.io/%E6%89%8B%E5%8A%A8%E5%AE%9E%E7%8E%B0vxlan%E8%BF%9E%E6%8E%A5%E8%B7%A8%E5%AE%BF%E4%B8%BB%E6%9C%BA%E5%AE%B9%E5%99%A8/" />
 <meta property="article:published_time" content="2019-08-26T16:51:45+08:00" />
 <meta property="article:modified_time" content="2019-08-26T16:51:45+08:00" />
-<meta itemprop="name" content="Network 1">
+<meta itemprop="name" content="手动实现vxlan连接不同宿主机的容器">
 <meta itemprop="description" content="在linux下实现vxlan网络 ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更">
 
 
 <meta itemprop="datePublished" content="2019-08-26T16:51:45&#43;08:00" />
 <meta itemprop="dateModified" content="2019-08-26T16:51:45&#43;08:00" />
-<meta itemprop="wordCount" content="6731">
+<meta itemprop="wordCount" content="6767">
 
 
 
 <meta itemprop="keywords" content="" />
 <meta name="twitter:card" content="summary"/>
-<meta name="twitter:title" content="Network 1"/>
+<meta name="twitter:title" content="手动实现vxlan连接不同宿主机的容器"/>
 <meta name="twitter:description" content="在linux下实现vxlan网络 ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更"/>
 
 <!--[if lte IE 9]>
@@ -320,7 +320,7 @@
           <article class="post bg-white">
   
   <header class="post-header">
-    <h1 class="post-title">Network 1</h1>
+    <h1 class="post-title">手动实现vxlan连接不同宿主机的容器</h1>
     
     <div class="post-meta">
       <time datetime="2019-08-26" class="post-time">
@@ -341,11 +341,7 @@
 <li><a href="#实验环境">实验环境</a></li>
 <li><a href="#实验">实验</a>
 <ul>
-<li><a href="#点对点的vxlan">点对点的vxlan</a>
-<ul>
-<li><a href="#路由变化">路由变化</a></li>
-<li><a href="#vxlan-fdb表变化">vxlan fdb表变化</a></li>
-</ul></li>
+<li><a href="#点对点的vxlan">点对点的vxlan</a></li>
 <li><a href="#多播模式的vxlan">多播模式的vxlan</a></li>
 <li><a href="#利用bridge接入容器">利用bridge接入容器</a></li>
 <li><a href="#手动维护-vtep-组">手动维护 vtep 组</a></li>
@@ -375,8 +371,8 @@
 <p>本次实验我们使用两个linux机器，系统为centos7，IP信息如下：</p>
 
 <ul>
-<li>10.104.109.48</li>
-<li>10.104.108.227</li>
+<li>192.168.1.100</li>
+<li>192.168.1.200</li>
 </ul>
 
 <p>​   我们搭建的overlay网络的网段为172.55.1.0/24 。实验目的就是vxlan能够通过overlay IP互相连接。</p>
@@ -388,11 +384,11 @@
 <pre><code>先来搭建一个最简单的 vxlan 网络，两台机器构成一个 vxlan 网络，每台机器上有一个 vtep，vtep 通过它们的 IP 互相通信。这次实验完成后的网络结构如下图所示：
 </code></pre>
 
-<p><img src="https://ws1.sinaimg.cn/large/006tKfTcgy1fjy54027bgj31hc0u0tde.jpg" alt="img" /></p>
+<p><img src="./images/1566869818907.png" alt="1566869818907" /></p>
 
-<p>首先使用 <code>ip</code> 命令创建我们的 vxlan interface：</p>
+<p>首先使用 <code>ip</code> 命令创建我们的 vxlan interface，在192.168.1.100上执行下述命令：</p>
 
-<p><code>ip link add vxlan1 type vxlan id 444 dstport 4789 remote 10.104.108.227 local 10.104.109.48 dev eth0</code></p>
+<p><code>ip link add vxlan1 type vxlan id 444 dstport 4789 remote 192.168.1.200 local 192.168.1.100 dev eth0</code></p>
 
 <p>大概解释下上述参数的含义：</p>
 
@@ -401,8 +397,8 @@
 <li>type vxlan：所创建的网络设备的类型</li>
 <li>id 444：所创建vxlan VNI，这个值可以在 1 到 2^24 之间</li>
 <li>dstport 4789:vtep 通信的端口，linux 默认使用 8472（为了保持兼容，默认值一直没有更改），而 IANA 分配的端口是 4789，所以我们这里显式指定了它的值</li>
-<li>remote 10.104.108.227: 对方 vtep 的地址，类似于点对点协议</li>
-<li>local 10.104.109.48: 当前节点 vtep 要使用的 IP 地址</li>
+<li>remote 192.168.1.200: 对方 vtep 的地址，类似于点对点协议</li>
+<li>local 192.168.1.100: 当前节点 vtep 要使用的 IP 地址</li>
 <li>dev eth0: 当节点用于 vtep 通信的网卡设备，用来读取 IP 地址。注意这个参数和 <code>local</code> 参数含义是相同的，在这里写出来是为了告诉大家有两个参数存在</li>
 </ul>
 
@@ -411,7 +407,7 @@
 <pre><code class="language-shell"># ip -d link show dev vxlan1
 1044: vxlan1: &lt;BROADCAST,MULTICAST&gt; mtu 1400 qdisc noop state DOWN mode DEFAULT 
     link/ether ba:08:0a:dd:3f:71 brd ff:ff:ff:ff:ff:ff promiscuity 0 
-    vxlan id 444 remote 10.104.108.227 local 10.104.109.48 dev eth0 srcport 0 0 dstport 4789 ageing 300 addrgenmode eui64
+    vxlan id 444 remote 192.168.1.200 local 192.168.1.100 dev eth0 srcport 0 0 dstport 4789 ageing 300 addrgenmode eui64
 </code></pre>
 
 <p>给vxlan1配置ip并启用：</p>
@@ -431,23 +427,25 @@ vxlan1: flags=4163&lt;UP,BROADCAST,RUNNING,MULTICAST&gt;  mtu 1400
 
 <p>再次观察宿主机上几个点：</p>
 
-<h4 id="路由变化">路由变化</h4>
+<ul>
+<li><p>路由变化</p>
 
 <pre><code class="language-shell"># ip r |grep vxlan1
 172.55.1.0/24 dev vxlan1  proto kernel  scope link  src 172.55.1.2 
-</code></pre>
+</code></pre></li>
 
-<h4 id="vxlan-fdb表变化">vxlan fdb表变化</h4>
+<li><p>vxlan fdb表变化</p>
 
 <pre><code class="language-shell"># bridge fdb| grep vxlan1
-00:00:00:00:00:00 dev vxlan1 dst 10.104.108.227 via eth0 self permanent
-</code></pre>
+00:00:00:00:00:00 dev vxlan1 dst 192.168.1.200 via eth0 self permanent
+</code></pre></li>
+</ul>
 
-<p>这个表项的意思是说，默认的而 vtep 对端地址为 <code>10.104.108.227</code>，换句话说，如果接收到的报文添加上 vxlan 头部之后都会发到 <code>10.104.108.227</code>。</p>
+<p>这个表项的意思是说，默认的而 vtep 对端地址为 <code>192.168.1.200</code>，换句话说，如果接收到的报文添加上 vxlan 头部之后都会发到 <code>192.168.1.200</code>。</p>
 
-<p>在另外一台虚拟机（<code>10.104.108.227</code>）上也进行相同的配置，要保证 VNI 也是 444，dstport 也是 4789，并修改 vtep 的地址和 remote IP 地址到相应的值。测试两台 vtep 的连通性：</p>
+<p>在另外一台虚拟机（<code>192.168.1.200</code>）上也进行相同的配置，要保证 VNI 也是 444，dstport 也是 4789，并修改 vtep 的地址和 remote IP 地址到相应的值。测试两台 vtep 的连通性：</p>
 
-<pre><code class="language-shell"># 在10.104.109.48上操作
+<pre><code class="language-shell"># 在192.168.1.100上操作
 # ping -c 3 172.55.1.3
 PING 172.55.1.3 (172.55.1.3) 56(84) bytes of data.
 64 bytes from 172.55.1.3: icmp_seq=1 ttl=64 time=2.14 ms
@@ -459,17 +457,7 @@ PING 172.55.1.3 (172.55.1.3) 56(84) bytes of data.
 rtt min/avg/max/mdev = 0.511/1.083/2.140/0.748 ms
 </code></pre>
 
-<p>那么问题来了，这两个vxlan设备是可以正常通信，怎么证明其走的就是隧道网络呢？</p>
-
-<p><img src="https://ws3.sinaimg.cn/large/006tKfTcgy1fjyb6b5ybdj30x20lq11q.jpg" alt="img" /></p>
-
-<p>可以看到 vxlan 报文可以分为三块：</p>
-
-<ul>
-<li>外部的UDP报文</li>
-<li>vxlan协议头部</li>
-<li>容器通信的实际报文</li>
-</ul>
+<p>那么问题来了，这两个vxlan设备是可以正常通信，怎么证明其走的就是隧道网络呢？其实可以通过抓包来看包的头部包含哪些内容来判断。</p>
 
 <h3 id="多播模式的vxlan">多播模式的vxlan</h3>
 
@@ -477,7 +465,7 @@ rtt min/avg/max/mdev = 0.511/1.083/2.140/0.748 ms
 
 <p>​   这个实验和前面一个非常相似，只不过主机之间不是点对点的连接，而是通过多播组成一个虚拟的整体。最终的网络架构也很相似（为了简单图中只有两个主机，但这个模型可以容纳多个主机组成 vxlan 网络）。</p>
 
-<p><img src="https://ws1.sinaimg.cn/large/006tKfTcgy1fjy54jqv9xj31hc0u0n2d.jpg" alt="img" /></p>
+<p><img src="./images/1566870232376.png" alt="1566870232376" /></p>
 
 <p>​   同样的，先创建vxlan设备，命令如下：</p>
 
@@ -500,11 +488,11 @@ rtt min/avg/max/mdev = 0.511/1.083/2.140/0.748 ms
 00:00:00:00:00:00 dev vxlan1 dst 239.1.1.1 via eth0 self permanent
 </code></pre>
 
-<p>​   这里默认表项的 dst 字段的值变成了多播地址 <code>239.1.1.1</code>，而不是之前对方的 vtep 地址。同理给所有需要通信的节点进行上述配置，可以验证他们能通过 10.20.1.0/24 网络互相访问。</p>
+<p>​   这里默认表项的 dst 字段的值变成了多播地址 <code>239.1.1.1</code>，而不是之前对方的 vtep 地址。同理给所有需要通信的节点进行上述配置，可以验证他们能通过 172.55..1.0/24 网络互相访问。</p>
 
 <p>​   我们来分析这个模式下 vxlan 通信的过程：</p>
 
-<p>​   在配置完成之后，vtep 通过 IGMP 加入同一个多播网络 <code>239.1.1.1</code>。</p>
+<p>​   在配置完成之后，所有linux机器的vtep 通过 IGMP 加入同一个多播网络 <code>239.1.1.1</code>。</p>
 
 <ol>
 <li>发送 ping 报文到 <code>172.55.1.3</code>，查看路由表，报文会从 vxlan1 发出去</li>
@@ -554,7 +542,7 @@ rtt min/avg/max/mdev = 0.511/1.083/2.140/0.748 ms
 
 <pre><code class="language-shell"># bridge fdb | grep vxlan1
 00:00:00:00:00:00 dev vxlan1 dst 239.1.1.1 via eth0 self permanent
-0a:86:31:3c:0d:6b dev vxlan1 dst 10.104.109.48 self 
+0a:86:31:3c:0d:6b dev vxlan1 dst 192.168.1.100 self 
 </code></pre>
 
 <p>可以看到，增加了一条点对点的信息。</p>
@@ -567,7 +555,7 @@ rtt min/avg/max/mdev = 0.511/1.083/2.140/0.748 ms
 
 <p>​   在 linux 中把同一个网段的 interface 组织起来正是网桥（bridge，或者 switch，这两个名称等价）的功能，因此这部分我们介绍如何用网桥把多个虚拟机或者容器放到同一个 vxlan overlay 网络中。最终实现的网络架构如下图所示：</p>
 
-<p><img src="https://ws2.sinaimg.cn/large/006tKfTcgy1fjy5517ktoj31hc0u0n39.jpg" alt="img" /></p>
+<p><img src="./images/1566871032525.png" alt="1566871032525" /></p>
 
 <p>​   因为创建虚拟机或者容器比较麻烦，我们用 network namespace 来模拟，从理论上它们是一样的。关于 network namespace 和 veth pair 的基础知识，请参考我<a href="https://cizixs.com/2017/02/10/network-virtualization-network-namespace">这篇文章</a>。</p>
 
@@ -579,13 +567,16 @@ rtt min/avg/max/mdev = 0.511/1.083/2.140/0.748 ms
     id 444 \
     dstport 4789 \
     group 239.1.1.1 \
-    local 10.104.109.48 \
+    local 192.168.1.100 \
     dev eth0
 </code></pre>
 
 <p>​   然后创建网桥 <code>br0</code>，把 vtep interface 绑定到上面：</p>
 
-<pre><code class="language-shell"># ip link add br0 type bridge
+<pre><code class="language-shell"># 创建名字为br0的网桥
+# ip link add br0 type bridge
+# 将vxlan设备vxlan1加到br0上
+# ip link set dev vxlan1 master br0
 # ip link set vxlan1 up
 # ip link set br0 up
 </code></pre>
@@ -658,7 +649,7 @@ rtt min/avg/max/mdev = 0.536/1.142/2.820/0.970 ms
 
 <p>从逻辑上可以认为，在 <code>vxlan1</code> 的帮助下同一个 vxlan overlay 网络中的容器是连接到同一个网桥上的，示意图如下：</p>
 
-<p><img src="https://ws2.sinaimg.cn/large/006tKfTcgy1fjy55dn4shj31hc0u0ag5.jpg" alt="img" /></p>
+<p><img src="./images/1566871334979.png" alt="1566871334979" /></p>
 
 <p>多播实现很简单，不需要中心化的控制。但是不是所有的网络都支持多播，而且需要事先规划多播组和 VNI 的对应关系，在 overlay 网络数量比较多时也会很麻烦，多播也会导致大量的无用报文在网络中出现。现在很多云计算的网络都会通过自动化的方式来发现 vtep 和 MAC 信息，也就是自动构建 vxlan 网络。下面的几个部分，我们来解开自动化 vxlan 网络的秘密。</p>
 
@@ -678,11 +669,11 @@ rtt min/avg/max/mdev = 0.536/1.142/2.820/0.970 ms
 
 <p>这个 vtep interface 创建的时候没有指定多播地址，当第一个 ARP 请求报文发送时它也不知道要发送给谁。但是我们可以手动添加默认的 FDB 表项，比如：</p>
 
-<pre><code class="language-shell">$ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 10.104.109.48
-$ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 10.104.108.227
+<pre><code class="language-shell">$ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 192.168.1.100
+$ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 192.168.1.200
 </code></pre>
 
-<p>这样的话，如果不知道对方 VTEP 的地址，就会往选择默认的表项，发到 <code>192.168.8.101</code> 和 <code>192.168.8.102</code>，相当于手动维护了一个 vtep 的多播组。</p>
+<p>这样的话，如果不知道对方 VTEP 的地址，就会往选择默认的表项，发到 <code>192.168.8.100</code> 和 <code>192.168.8.200</code>，相当于手动维护了一个 vtep 的多播组。</p>
 
 <p>在所有的节点的 vtep 上更新对应的 fdb 表项，就能实现 overlay 网络的连通。整个通信流程和多播模式相同，唯一的区别是，vtep 第一次会给所有的组内成员发送单播报文，当然也只有一个 vtep 会做出应答。</p>
 
@@ -707,8 +698,8 @@ $ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 10.104.108.227
 
 <p>然后可以添加 fdb 表项告诉 vtep 容器 MAC 对应的主机 IP 地址：</p>
 
-<pre><code class="language-shell">$ bridge fdb append 52:5e:55:58:9a:ab dev vxlan0 dst 10.104.109.48
-$ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 10.104.108.227
+<pre><code class="language-shell">$ bridge fdb append 52:5e:55:58:9a:ab dev vxlan0 dst 192.168.1.100
+$ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 192.168.1.200
 </code></pre>
 
 <p>如果知道了对方的 MAC 地址，vtep 搜索 fdb 表项就知道应该发送到哪个对应的 vtep 了。需要注意是的，这个情况还是需要默认的表项（那些全零的表项），在不知道容器 IP 和 MAC 对应关系的时候通过默认方式发送 ARP 报文去查询对方的 MAC 地址。</p>
@@ -737,8 +728,8 @@ $ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 10.104.108.227
 
 <p>当然我们还是要手动更新 fdb 表项来构建 vtep 组，</p>
 
-<pre><code class="language-shell">$ bridge fdb append 52:5e:55:58:9a:ab dev vxlan0 dst 10.104.108.227
-$ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 10.104.109.48
+<pre><code class="language-shell">$ bridge fdb append 52:5e:55:58:9a:ab dev vxlan0 dst 192.168.1.100
+$ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 192.168.1.200
 </code></pre>
 
 <p>然后，还需要为 vtep 添加 arp 表项，所有要通信容器的 <code>IP - MAC</code>二元组都要加进去。</p>
@@ -823,13 +814,9 @@ $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
 
 <p>虽然上述的实验中，为了简化图中只有两台主机，而且只有一个 vxlan 网络，但是利用相同的操作很容易创建另外一个 vxlan 网络（必须要保证 vtep 的 VNI 值不同，如果使用多播，也要保证多播 IP 不同），如下图所示：</p>
 
-<p><img src="https://ws3.sinaimg.cn/large/006tKfTcgy1fjy55xwqxuj31hc0u0gqo.jpg" alt="img" /></p>
+<p><img src="./images/1566871782602.png" alt="1566871782602" /></p>
 
 <p>主机会根据 VNI 来区别不同的 vxlan 网络，不同的 vxlan 网络之间不会相互影响。如果再加上 network namespace，就能实现更复杂的网络结构。</p>
-
-<p>下：</p>
-
-<p>多播实现很简单，不需要中心化的控</p>
 
   </div>
 
