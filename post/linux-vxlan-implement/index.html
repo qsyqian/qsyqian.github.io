@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>手动实现vxlan连接不同宿主机的容器 - Jane - A super concise theme for Hugo</title>
+  <title>手动创建vxlan网络连接container - Jane - A super concise theme for Hugo</title>
   
 
 <meta name="renderer" content="webkit" />
@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <meta name="author" content="qsyqian" />
-  <meta name="description" content="在linux下实现vxlan网络 ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更" />
+  <meta name="description" content="手动创建vxlan网络连接container ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。" />
 
   <meta name="keywords" content="Hugo, theme, jane" />
 
@@ -35,7 +35,7 @@
 <meta name="generator" content="Hugo 0.56.3" />
 
 
-<link rel="canonical" href="http://qsyqian.github.io/linux%E4%B8%8B%E5%AE%9E%E7%8E%B0vxlan/" />
+<link rel="canonical" href="http://qsyqian.github.io/post/linux-vxlan-implement/" />
 
 
 
@@ -57,26 +57,26 @@
 
 
 
-<meta property="og:title" content="手动实现vxlan连接不同宿主机的容器" />
-<meta property="og:description" content="在linux下实现vxlan网络 ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更" />
+<meta property="og:title" content="手动创建vxlan网络连接container" />
+<meta property="og:description" content="手动创建vxlan网络连接container ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。" />
 <meta property="og:type" content="article" />
-<meta property="og:url" content="http://qsyqian.github.io/linux%E4%B8%8B%E5%AE%9E%E7%8E%B0vxlan/" />
-<meta property="article:published_time" content="2019-08-26T16:51:45+08:00" />
-<meta property="article:modified_time" content="2019-08-26T16:51:45+08:00" />
-<meta itemprop="name" content="手动实现vxlan连接不同宿主机的容器">
-<meta itemprop="description" content="在linux下实现vxlan网络 ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更">
+<meta property="og:url" content="http://qsyqian.github.io/post/linux-vxlan-implement/" />
+<meta property="article:published_time" content="2019-08-27T10:57:51+08:00" />
+<meta property="article:modified_time" content="2019-08-27T10:57:51+08:00" />
+<meta itemprop="name" content="手动创建vxlan网络连接container">
+<meta itemprop="description" content="手动创建vxlan网络连接container ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。">
 
 
-<meta itemprop="datePublished" content="2019-08-26T16:51:45&#43;08:00" />
-<meta itemprop="dateModified" content="2019-08-26T16:51:45&#43;08:00" />
-<meta itemprop="wordCount" content="6767">
+<meta itemprop="datePublished" content="2019-08-27T10:57:51&#43;08:00" />
+<meta itemprop="dateModified" content="2019-08-27T10:57:51&#43;08:00" />
+<meta itemprop="wordCount" content="6773">
 
 
 
 <meta itemprop="keywords" content="" />
 <meta name="twitter:card" content="summary"/>
-<meta name="twitter:title" content="手动实现vxlan连接不同宿主机的容器"/>
-<meta name="twitter:description" content="在linux下实现vxlan网络 ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更"/>
+<meta name="twitter:title" content="手动创建vxlan网络连接container"/>
+<meta name="twitter:description" content="手动创建vxlan网络连接container ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。"/>
 
 <!--[if lte IE 9]>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/classlist/1.1.20170427/classList.min.js"></script>
@@ -318,25 +318,33 @@
       <div class="content-wrapper">
         <div id="content" class="content container">
           <article class="post bg-white">
-  
-  <header class="post-header">
-    <h1 class="post-title">手动实现vxlan连接不同宿主机的容器</h1>
     
-    <div class="post-meta">
-      <time datetime="2019-08-26" class="post-time">
-        2019-08-26
-      </time>
-    </div>
-  </header>
+    <header class="post-header">
+      <h1 class="post-title">手动创建vxlan网络连接container</h1>
+      
+      <div class="post-meta">
+        <time datetime="2019-08-27" class="post-time">
+          2019-08-27
+        </time>
+        
+        
 
-  
-  
+        
+        
+
+        
+        
+      </div>
+    </header>
+
+    
+    
 <div class="post-toc" id="post-toc">
   <h2 class="post-toc-title">Table of Contents</h2>
   <div class="post-toc-content">
     <nav id="TableOfContents">
 <ul>
-<li><a href="#在linux下实现vxlan网络">在linux下实现vxlan网络</a>
+<li><a href="#手动创建vxlan网络连接container">手动创建vxlan网络连接container</a>
 <ul>
 <li><a href="#实验环境">实验环境</a></li>
 <li><a href="#实验">实验</a>
@@ -356,11 +364,11 @@
   </div>
 </div>
 
-  
-  <div class="post-content">
+    
+    <div class="post-content">
       
 
-<h1 id="在linux下实现vxlan网络">在linux下实现vxlan网络</h1>
+<h1 id="手动创建vxlan网络连接container">手动创建vxlan网络连接container</h1>
 
 <p>​   本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更多关于vxlan协议的一些理论，包括产生的北京，报文的格式，请参考<a href="https://cizixs.com/2017/09/25/vxlan-protocol-introduction">vxlan 协议的介绍文章</a>。</p>
 
@@ -384,7 +392,7 @@
 <pre><code>先来搭建一个最简单的 vxlan 网络，两台机器构成一个 vxlan 网络，每台机器上有一个 vtep，vtep 通过它们的 IP 互相通信。这次实验完成后的网络结构如下图所示：
 </code></pre>
 
-<p><img src="./images/1566869818907.png" alt="1566869818907" /></p>
+<p><img src="../images/1566869818907.png" alt="1566869818907" /></p>
 
 <p>首先使用 <code>ip</code> 命令创建我们的 vxlan interface，在192.168.1.100上执行下述命令：</p>
 
@@ -465,7 +473,7 @@ rtt min/avg/max/mdev = 0.511/1.083/2.140/0.748 ms
 
 <p>​   这个实验和前面一个非常相似，只不过主机之间不是点对点的连接，而是通过多播组成一个虚拟的整体。最终的网络架构也很相似（为了简单图中只有两个主机，但这个模型可以容纳多个主机组成 vxlan 网络）。</p>
 
-<p><img src="./images/1566870232376.png" alt="1566870232376" /></p>
+<p><img src="../images/1566870232376.png" alt="1566870232376" /></p>
 
 <p>​   同样的，先创建vxlan设备，命令如下：</p>
 
@@ -555,7 +563,7 @@ rtt min/avg/max/mdev = 0.511/1.083/2.140/0.748 ms
 
 <p>​   在 linux 中把同一个网段的 interface 组织起来正是网桥（bridge，或者 switch，这两个名称等价）的功能，因此这部分我们介绍如何用网桥把多个虚拟机或者容器放到同一个 vxlan overlay 网络中。最终实现的网络架构如下图所示：</p>
 
-<p><img src="./images/1566871032525.png" alt="1566871032525" /></p>
+<p><img src="../images/1566871032525.png" alt="1566871032525" /></p>
 
 <p>​   因为创建虚拟机或者容器比较麻烦，我们用 network namespace 来模拟，从理论上它们是一样的。关于 network namespace 和 veth pair 的基础知识，请参考我<a href="https://cizixs.com/2017/02/10/network-virtualization-network-namespace">这篇文章</a>。</p>
 
@@ -649,7 +657,7 @@ rtt min/avg/max/mdev = 0.536/1.142/2.820/0.970 ms
 
 <p>从逻辑上可以认为，在 <code>vxlan1</code> 的帮助下同一个 vxlan overlay 网络中的容器是连接到同一个网桥上的，示意图如下：</p>
 
-<p><img src="./images/1566871334979.png" alt="1566871334979" /></p>
+<p><img src="../images/1566871334979.png" alt="1566871334979" /></p>
 
 <p>多播实现很简单，不需要中心化的控制。但是不是所有的网络都支持多播，而且需要事先规划多播组和 VNI 的对应关系，在 overlay 网络数量比较多时也会很麻烦，多播也会导致大量的无用报文在网络中出现。现在很多云计算的网络都会通过自动化的方式来发现 vtep 和 MAC 信息，也就是自动构建 vxlan 网络。下面的几个部分，我们来解开自动化 vxlan 网络的秘密。</p>
 
@@ -671,6 +679,7 @@ rtt min/avg/max/mdev = 0.536/1.142/2.820/0.970 ms
 
 <pre><code class="language-shell">$ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 192.168.1.100
 $ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 192.168.1.200
+
 </code></pre>
 
 <p>这样的话，如果不知道对方 VTEP 的地址，就会往选择默认的表项，发到 <code>192.168.8.100</code> 和 <code>192.168.8.200</code>，相当于手动维护了一个 vtep 的多播组。</p>
@@ -692,6 +701,7 @@ $ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 192.168.1.200
     dstport 4789 \
     dev eth0 \
     nolearning
+
 </code></pre>
 
 <p>这次我们添加了 <code>nolearning</code> 参数，这个参数告诉 vtep 不要通过收到的报文来学习 fdb 表项的内容，因为我们会自动维护这个列表。</p>
@@ -700,6 +710,7 @@ $ bridge fdb append 00:00:00:00:00:00 dev vxlan0 dst 192.168.1.200
 
 <pre><code class="language-shell">$ bridge fdb append 52:5e:55:58:9a:ab dev vxlan0 dst 192.168.1.100
 $ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 192.168.1.200
+
 </code></pre>
 
 <p>如果知道了对方的 MAC 地址，vtep 搜索 fdb 表项就知道应该发送到哪个对应的 vtep 了。需要注意是的，这个情况还是需要默认的表项（那些全零的表项），在不知道容器 IP 和 MAC 对应关系的时候通过默认方式发送 ARP 报文去查询对方的 MAC 地址。</p>
@@ -722,6 +733,7 @@ $ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 192.168.1.200
     dev eth0 \
     nolearning \
     proxy
+
 </code></pre>
 
 <p>这条命令和上部分相比多了 <code>proxy</code> 参数，这个参数告诉 vtep 承担 ARP 代理的功能。如果收到 ARP 请求，并且自己知道结果就直接作出应答。</p>
@@ -730,12 +742,14 @@ $ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 192.168.1.200
 
 <pre><code class="language-shell">$ bridge fdb append 52:5e:55:58:9a:ab dev vxlan0 dst 192.168.1.100
 $ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst 192.168.1.200
+
 </code></pre>
 
 <p>然后，还需要为 vtep 添加 arp 表项，所有要通信容器的 <code>IP - MAC</code>二元组都要加进去。</p>
 
 <pre><code class="language-shell">$ ip neigh add 172.55.1.2 lladdr d6:d9:cd:0a:a4:28 dev vxlan0
 $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
+
 </code></pre>
 
 <p>在要通信的所有节点配置完之后，容器就能互相 ping 通。当容器要访问彼此，并且第一次发送 ARP 请求时，这个请求并不会发给所有的 vtep，而是当前由当前 vtep 做出应答，大大减少了网络上的报文。</p>
@@ -766,6 +780,7 @@ $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
     proxy \
     l2miss \
     l3miss
+
 </code></pre>
 
 <p>这次多了两个参数 <code>l2miss</code> 和 <code>l3miss</code>：</p>
@@ -783,6 +798,7 @@ $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
 
 <pre><code class="language-shell"># ip monitor all dev vxlan0
 [nsid current]miss 172.55.1.3  STALE
+
 </code></pre>
 
 <p><code>l3miss</code> 是说这个 IP 地址，vtep 不知道它对应的 MAC 地址，因此要手动添加 arp 记录：</p>
@@ -791,6 +807,7 @@ $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
     lladdr b2:ee:aa:42:8b:0b \
     dev vxlan0 \
     nud reachable
+
 </code></pre>
 
 <p>上面这条命令设置的 <code>nud reachable</code> 参数意思是，这条记录有一个超时时间，系统发现它无效一段时间会自动删除。这样的好处是，不需要手动去删除它，删除后需要通信内核会再次发送通知事件。 <code>nud</code> 是 <code>Neighbour Unreachability Detection</code> 的缩写， 当然根据需要这个参数也可以设置成其他值，比如 <code>permanent</code>，表示这个记录永远不会过时，系统不会检查它是否正确，也不会删除它，只有管理员也能对它进行修改。</p>
@@ -799,11 +816,13 @@ $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
 
 <pre><code class="language-shell"># ip monitor all dev vxlan0
 [nsid current]miss lladdr b2:ee:aa:42:8b:0b STALE
+
 </code></pre>
 
 <p>类似的，这个事件是说不知道这个容器的 MAC 地址在哪个节点上，所以要手动添加 fdb 记录：</p>
 
 <pre><code class="language-shell"># bridge fdb add b2:ee:aa:42:8b:0b dst 192.168.8.101 dev vxlan0
+
 </code></pre>
 
 <p>在通信的另一台机器上执行响应的操作，就会发现两者能 ping 通了。</p>
@@ -814,14 +833,14 @@ $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
 
 <p>虽然上述的实验中，为了简化图中只有两台主机，而且只有一个 vxlan 网络，但是利用相同的操作很容易创建另外一个 vxlan 网络（必须要保证 vtep 的 VNI 值不同，如果使用多播，也要保证多播 IP 不同），如下图所示：</p>
 
-<p><img src="./images/1566871782602.png" alt="1566871782602" /></p>
+<p><img src="../images/1566871782602.png" alt="1566871782602" /></p>
 
 <p>主机会根据 VNI 来区别不同的 vxlan 网络，不同的 vxlan 网络之间不会相互影响。如果再加上 network namespace，就能实现更复杂的网络结构。</p>
 
-  </div>
+    </div>
 
-  
-  
+    
+    
 <div class="post-copyright">
   <p class="copyright-item">
     <span class="item-title">Author</span>
@@ -830,7 +849,7 @@ $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
   <p class="copyright-item">
     <span class="item-title">LastMod</span>
     <span class="item-content">
-      2019-08-26
+      2019-08-27
       
     </span>
   </p>
@@ -842,12 +861,38 @@ $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
 </div>
 
 
+    
+    
+
+    <footer class="post-footer">
+      
+
+      
+      <nav class="post-nav">
+        
+        
+          <a class="next" href="/post/use-hugo-deploy-blog/">
+            <span class="next-text nav-default">使用hugo搭建博客</span>
+            <span class="prev-text nav-mobile">Next</span>
+            
+            <i class="iconfont">
+              <svg class="icon" viewBox="0 0 1024 1024" version="1.1"
+  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="18" height="18">
+  <path d="M332.091514 74.487481l-75.369571 89.491197c-10.963703 12.998035-10.285251 32.864502 1.499144 44.378743l286.278095 300.375162L266.565125 819.058374c-11.338233 12.190647-11.035334 32.285311 0.638543 44.850487l80.46666 86.564541c11.680017 12.583596 30.356378 12.893658 41.662889 0.716314l377.434212-421.426145c11.332093-12.183484 11.041474-32.266891-0.657986-44.844348l-80.46666-86.564541c-1.772366-1.910513-3.706415-3.533476-5.750981-4.877077L373.270379 71.774697C361.493148 60.273758 343.054193 61.470003 332.091514 74.487481z"></path>
+</svg>
+
+            </i>
+          </a>
+      </nav>
+    </footer>
+  </article>
+
   
   
-</article>
 
-
-
+  
+  
 
   
 

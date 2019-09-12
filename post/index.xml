@@ -13,10 +13,10 @@
     
     <item>
       <title>手动创建vxlan网络连接container</title>
-      <link>http://qsyqian.github.io/post/network/linux-vxlan-implement/</link>
+      <link>http://qsyqian.github.io/post/linux-vxlan-implement/</link>
       <pubDate>Tue, 27 Aug 2019 10:57:51 +0800</pubDate>
       
-      <guid>http://qsyqian.github.io/post/network/linux-vxlan-implement/</guid>
+      <guid>http://qsyqian.github.io/post/linux-vxlan-implement/</guid>
       <description>手动创建vxlan网络连接container ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。</description>
     </item>
     
