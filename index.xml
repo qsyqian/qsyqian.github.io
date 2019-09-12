@@ -44,7 +44,7 @@
 &lt;pre&gt;&lt;code&gt;先来搭建一个最简单的 vxlan 网络，两台机器构成一个 vxlan 网络，每台机器上有一个 vtep，vtep 通过它们的 IP 互相通信。这次实验完成后的网络结构如下图所示：
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;&lt;img src=&#34;../images/1566869818907.png&#34; alt=&#34;1566869818907&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://tva1.sinaimg.cn/large/007X8olVly1g6wqzd5x70j30fl07vweg.jpg&#34; alt=&#34;1566869818907&#34; /&gt;&lt;/p&gt;
 
 &lt;p&gt;首先使用 &lt;code&gt;ip&lt;/code&gt; 命令创建我们的 vxlan interface，在192.168.1.100上执行下述命令：&lt;/p&gt;
 
@@ -125,7 +125,7 @@ rtt min/avg/max/mdev = 0.511/1.083/2.140/0.748 ms
 
 &lt;p&gt;​   这个实验和前面一个非常相似，只不过主机之间不是点对点的连接，而是通过多播组成一个虚拟的整体。最终的网络架构也很相似（为了简单图中只有两个主机，但这个模型可以容纳多个主机组成 vxlan 网络）。&lt;/p&gt;
 
-&lt;p&gt;&lt;img src=&#34;../images/1566870232376.png&#34; alt=&#34;1566870232376&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://tva1.sinaimg.cn/large/007X8olVly1g6wr0twgasj30fl0aw74b.jpg&#34; alt=&#34;1566870232376&#34; /&gt;&lt;/p&gt;
 
 &lt;p&gt;​   同样的，先创建vxlan设备，命令如下：&lt;/p&gt;
 
@@ -215,7 +215,7 @@ rtt min/avg/max/mdev = 0.511/1.083/2.140/0.748 ms
 
 &lt;p&gt;​   在 linux 中把同一个网段的 interface 组织起来正是网桥（bridge，或者 switch，这两个名称等价）的功能，因此这部分我们介绍如何用网桥把多个虚拟机或者容器放到同一个 vxlan overlay 网络中。最终实现的网络架构如下图所示：&lt;/p&gt;
 
-&lt;p&gt;&lt;img src=&#34;../images/1566871032525.png&#34; alt=&#34;1566871032525&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://tva1.sinaimg.cn/large/007X8olVly1g6wr1rccnzj30fl0aw3yn.jpg&#34; alt=&#34;1566871032525&#34; /&gt;&lt;/p&gt;
 
 &lt;p&gt;​   因为创建虚拟机或者容器比较麻烦，我们用 network namespace 来模拟，从理论上它们是一样的。关于 network namespace 和 veth pair 的基础知识，请参考我&lt;a href=&#34;https://cizixs.com/2017/02/10/network-virtualization-network-namespace&#34;&gt;这篇文章&lt;/a&gt;。&lt;/p&gt;
 
@@ -309,7 +309,7 @@ rtt min/avg/max/mdev = 0.536/1.142/2.820/0.970 ms
 
 &lt;p&gt;从逻辑上可以认为，在 &lt;code&gt;vxlan1&lt;/code&gt; 的帮助下同一个 vxlan overlay 网络中的容器是连接到同一个网桥上的，示意图如下：&lt;/p&gt;
 
-&lt;p&gt;&lt;img src=&#34;../images/1566871334979.png&#34; alt=&#34;1566871334979&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://tva1.sinaimg.cn/large/007X8olVly1g6wr243umcj30fl0awt8w.jpg&#34; alt=&#34;1566871334979&#34; /&gt;&lt;/p&gt;
 
 &lt;p&gt;多播实现很简单，不需要中心化的控制。但是不是所有的网络都支持多播，而且需要事先规划多播组和 VNI 的对应关系，在 overlay 网络数量比较多时也会很麻烦，多播也会导致大量的无用报文在网络中出现。现在很多云计算的网络都会通过自动化的方式来发现 vtep 和 MAC 信息，也就是自动构建 vxlan 网络。下面的几个部分，我们来解开自动化 vxlan 网络的秘密。&lt;/p&gt;
 
@@ -485,7 +485,7 @@ $ ip neigh add 172.55.1.3 lladdr 52:5e:55:58:9a:ab dev vxlan0
 
 &lt;p&gt;虽然上述的实验中，为了简化图中只有两台主机，而且只有一个 vxlan 网络，但是利用相同的操作很容易创建另外一个 vxlan 网络（必须要保证 vtep 的 VNI 值不同，如果使用多播，也要保证多播 IP 不同），如下图所示：&lt;/p&gt;
 
-&lt;p&gt;&lt;img src=&#34;../images/1566871782602.png&#34; alt=&#34;1566871782602&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;http://tva1.sinaimg.cn/large/007X8olVly1g6wr2luuenj30pg0b2jrq.jpg&#34; alt=&#34;1566871782602&#34; /&gt;&lt;/p&gt;
 
 &lt;p&gt;主机会根据 VNI 来区别不同的 vxlan 网络，不同的 vxlan 网络之间不会相互影响。如果再加上 network namespace，就能实现更复杂的网络结构。&lt;/p&gt;
 </description>
