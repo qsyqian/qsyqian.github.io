@@ -6,10 +6,373 @@
     <description>Recent content on Jane - A super concise theme for Hugo</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Tue, 27 Aug 2019 10:57:51 +0800</lastBuildDate>
+    <lastBuildDate>Thu, 12 Sep 2019 16:59:05 +0800</lastBuildDate>
     
         <atom:link href="http://qsyqian.github.io/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>First</title>
+      <link>http://qsyqian.github.io/flannel/flannel-source-code-analysis/</link>
+      <pubDate>Thu, 12 Sep 2019 16:59:05 +0800</pubDate>
+      
+      <guid>http://qsyqian.github.io/flannel/flannel-source-code-analysis/</guid>
+      
+        <description>
+
+&lt;h1 id=&#34;flannel源码分析&#34;&gt;Flannel源码分析&lt;/h1&gt;
+
+&lt;h2 id=&#34;前言&#34;&gt;前言&lt;/h2&gt;
+
+&lt;p&gt;flannel作为kubernetes的一种网络解决方案，在社区是比较活跃的。支持多种backend。&lt;/p&gt;
+
+&lt;p&gt;flannel源码地址在：&lt;a href=&#34;https://github.com/coreos/flannel&#34;&gt;https://github.com/coreos/flannel&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;从官网上把flannel的代码clone下来，目录结构如下：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;$ ll -ah
+total 222K
+drwxr-xr-x 1 user 197121    0 8月  30 18:37 ./
+drwxr-xr-x 1 user 197121    0 8月  30 18:31 ../
+-rw-r--r-- 1 user 197121  351 8月  30 18:33 .appveyor.yml
+-rw-r--r-- 1 user 197121   56 8月  30 18:33 .dockerignore
+drwxr-xr-x 1 user 197121    0 9月  17 09:34 .git/
+drwxr-xr-x 1 user 197121    0 8月  30 18:33 .github/
+-rw-r--r-- 1 user 197121  147 8月  30 18:33 .gitignore
+drwxr-xr-x 1 user 197121    0 9月  17 11:22 .idea/
+-rw-r--r-- 1 user 197121  411 8月  30 18:33 .travis.yml
+drwxr-xr-x 1 user 197121    0 8月  30 18:33 backend/
+-rw-r--r-- 1 user 197121 3.7K 8月  30 18:33 bill-of-materials.json
+-rw-r--r-- 1 user 197121   98 8月  30 18:33 bill-of-materials.override.json
+-rw-r--r-- 1 user 197121 3.1K 8月  30 18:33 code-of-conduct.md
+-rw-r--r-- 1 user 197121 2.5K 8月  30 18:33 CONTRIBUTING.md
+-rw-r--r-- 1 user 197121 1.5K 8月  30 18:33 DCO
+drwxr-xr-x 1 user 197121    0 8月  30 18:33 dist/
+-rw-r--r-- 1 user 197121  427 8月  30 18:33 Dockerfile.amd64
+-rw-r--r-- 1 user 197121  504 8月  30 18:33 Dockerfile.arm
+-rw-r--r-- 1 user 197121  494 8月  30 18:33 Dockerfile.arm64
+-rw-r--r-- 1 user 197121  508 8月  30 18:33 Dockerfile.ppc64le
+-rw-r--r-- 1 user 197121  504 8月  30 18:33 Dockerfile.s390x
+drwxr-xr-x 1 user 197121    0 8月  30 18:33 Documentation/
+-rw-r--r-- 1 user 197121  11K 8月  30 18:33 glide.lock
+-rw-r--r-- 1 user 197121 1.6K 8月  30 18:33 glide.yaml
+-rwxr-xr-x 1 user 197121  298 8月  30 18:33 header-check.sh*
+drwxr-xr-x 1 user 197121    0 8月  30 18:33 images/
+-rw-r--r-- 1 user 197121  12K 8月  30 18:33 LICENSE
+drwxr-xr-x 1 user 197121    0 8月  30 18:33 logos/
+-rw-r--r-- 1 user 197121  21K 8月  30 18:33 main.go
+-rw-r--r-- 1 user 197121   98 8月  30 18:33 MAINTAINERS
+-rw-r--r-- 1 user 197121  12K 8月  30 18:33 Makefile
+drwxr-xr-x 1 user 197121    0 8月  30 18:33 network/
+-rw-r--r-- 1 user 197121  131 8月  30 18:33 NOTICE
+-rw-r--r-- 1 user 197121  212 8月  30 18:33 OWNERS
+-rw-r--r-- 1 user 197121  75K 8月  30 18:33 packet-01.png
+drwxr-xr-x 1 user 197121    0 8月  30 18:33 pkg/
+-rw-r--r-- 1 user 197121 4.3K 8月  30 18:33 README.md
+drwxr-xr-x 1 user 197121    0 8月  30 18:33 subnet/
+drwxr-xr-x 1 user 197121    0 8月  30 18:33 vendor/
+drwxr-xr-x 1 user 197121    0 8月  30 18:33 version/
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;这里介绍几个主要目录的用途：&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;backend，flannel支持多种flannel，比如host-gw、vxlan等&lt;/li&gt;
+&lt;li&gt;dist，一些脚本和dockerfile文件&lt;/li&gt;
+&lt;li&gt;network，对主机的iptables进行操作&lt;/li&gt;
+&lt;li&gt;pkg，外部可引用的包&lt;/li&gt;
+&lt;li&gt;subnet，flannel中每个host对应一个subnet&lt;/li&gt;
+&lt;li&gt;./main.go，flannel程序的入口&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;经过上述分析，分析flannel的源代码就从./main.go文件入手。&lt;/p&gt;
+
+&lt;h2 id=&#34;1-参数解析&#34;&gt;1.参数解析&lt;/h2&gt;
+
+&lt;p&gt;./main.go中结构体CmdLineOpts包含了所有命令行传入的参数解析，具体如下：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;type CmdLineOpts struct {
+	etcdEndpoints          string
+	etcdPrefix             string
+	etcdKeyfile            string
+	etcdCertfile           string
+	etcdCAFile             string
+	etcdUsername           string
+	etcdPassword           string
+    // 上述的etcd参数，指的是如果采用etcd作为后端subnet存储的话，要提供上述etcd连接参数
+	help                   bool
+	version                bool
+    // 帮助和打印出version
+	kubeSubnetMgr          bool
+    // 如果上述kubeSubnetMgr为true，则使用kube-apiserver为subnet的后端存储（其实是将每个node的subnet信息存入到了node的annotations中）
+	kubeApiUrl             string
+	kubeAnnotationPrefix   string
+	kubeConfigFile         string
+    // 上述三个kube相关的参数标识连接kube-apiserver的必要参数
+	iface                  flagSlice
+	ifaceRegex             flagSlice
+    // iface参数，用来作为多节点通信的网卡，不指定的话，flannel会使用默认网卡和其上IP信息
+	ipMasq                 bool
+    // ipMasq （具体意义待定）
+	subnetFile             string
+    // 存储subnet的文件，默认为/run/flannel/subnet.env，其中存储了整个集群的pod subnet段，本机上pod的subnet段等信息
+	subnetDir              string
+	publicIP               string
+    // 用来跨节点通信的IP地址，和上述iface参数类似
+	subnetLeaseRenewMargin int
+    // subnet是以lease（租约）的形式存储起来的，到期会自动过期。需要定时续租，改时间表示在lease过期前多少时间续租，单位是min，默认值是60
+	healthzIP              string
+	healthzPort            int
+    // 用来健康检查的IP和PORT
+	charonExecutablePath   string
+	charonViciUri          string
+	iptablesResyncSeconds  int
+    // 同步iptables规则的时间间隔。默认5s同步一次
+	iptablesForwardRules   bool
+    // add default accept rules to FORWARD chain in iptables
+	netConfPath            string
+    // networkConfiguration PATH
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;main.go中首先是init函数对命令行传入参数进行赋值，没有赋值的采用默认值。然后进到main()函数中。&lt;/p&gt;
+
+&lt;h2 id=&#34;2-main函数结构&#34;&gt;2.main函数结构&lt;/h2&gt;
+
+&lt;p&gt;首先看一下main函数的主要结构，然后分步分析：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func main() {
+	// 如果是打印版本，则打印退出
+	if opts.version {
+		fmt.Fprintln(os.Stderr, version.Version)
+		os.Exit(0)
+	}
+
+	flagutil.SetFlagsFromEnv(flannelFlags, &amp;quot;FLANNELD&amp;quot;)
+
+	// Validate flags
+    // 验证参数，如果续租时间大于24*60或者小于等于0，则直接报错。
+    // 因为默认的租约时间为24*60
+	if opts.subnetLeaseRenewMargin &amp;gt;= 24*60 || opts.subnetLeaseRenewMargin &amp;lt;= 0 {
+		log.Error(&amp;quot;Invalid subnet-lease-renew-margin option, out of acceptable range&amp;quot;)
+		os.Exit(1)
+	}
+    
+    // Work out which interface to use
+    // 找出externalInterface，很简单，如果命令行参数指定了使用哪个网卡，则直接使用，若没指定，则需要自己去找默认的网卡，主要是LookupExtIface这个函数来寻找。这个函数中所调用的ip.GetDefaultGatewayIface()是位于pkg目录下，在自己写程序来获取linux主机默认网卡和ip信息的时候也可以直接引用该函数
+	var extIface *backend.ExternalInterface
+	var err error
+	// Check the default interface only if no interfaces are specified
+	if len(opts.iface) == 0 &amp;amp;&amp;amp; len(opts.ifaceRegex) == 0 {
+		extIface, err = LookupExtIface(&amp;quot;&amp;quot;, &amp;quot;&amp;quot;)
+		if err != nil {
+			log.Error(&amp;quot;Failed to find any valid interface to use: &amp;quot;, err)
+			os.Exit(1)
+		}
+	} else {
+		// Check explicitly specified interfaces
+		for _, iface := range opts.iface {
+			extIface, err = LookupExtIface(iface, &amp;quot;&amp;quot;)
+			if err != nil {
+				log.Infof(&amp;quot;Could not find valid interface matching %s: %s&amp;quot;, iface, err)
+			}
+
+			if extIface != nil {
+				break
+			}
+		}
+
+		// Check interfaces that match any specified regexes
+		if extIface == nil {
+			for _, ifaceRegex := range opts.ifaceRegex {
+				extIface, err = LookupExtIface(&amp;quot;&amp;quot;, ifaceRegex)
+				if err != nil {
+					log.Infof(&amp;quot;Could not find valid interface matching %s: %s&amp;quot;, ifaceRegex, err)
+				}
+
+				if extIface != nil {
+					break
+				}
+			}
+		}
+
+		if extIface == nil {
+			// Exit if any of the specified interfaces do not match
+			log.Error(&amp;quot;Failed to find interface to use that matches the interfaces and/or regexes provided&amp;quot;)
+			os.Exit(1)
+		}
+	}
+    
+    // 第一步：创建SubnetManager，主要是用来管理subnet的。
+    sm, err := newSubnetManager()
+	if err != nil {
+		log.Error(&amp;quot;Failed to create SubnetManager: &amp;quot;, err)
+		os.Exit(1)
+	}
+	log.Infof(&amp;quot;Created subnet manager: %s&amp;quot;, sm.Name())
+    
+    // 下述这段代码是控制程序优雅退出的，首先是创建了sigs channel，类型为os.Signal,buffer为1.
+    // 此处两个golang的用法，第一个是context，第二个是sync.waitGroup
+    // Register for SIGINT and SIGTERM
+	log.Info(&amp;quot;Installing signal handlers&amp;quot;)
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+
+	// This is the main context that everything should run in.
+	// All spawned goroutines should exit when cancel is called on this context.
+	// Go routines spawned from main.go coordinate using a WaitGroup. This provides a mechanism to allow the shutdownHandler goroutine
+	// to block until all the goroutines return . If those goroutines spawn other goroutines then they are responsible for
+	// blocking and returning only when cancel() is called.
+	// 创建全局的ctx
+    ctx, cancel := context.WithCancel(context.Background())
+	
+    // 创建任务
+    wg := sync.WaitGroup{}
+
+   // 添加一个任务
+	wg.Add(1)
+	go func() {
+        // shutdownHander中如果监听到系统信号，则调用cancel函数，那么所有的调用都将终止
+		shutdownHandler(ctx, sigs, cancel)
+		wg.Done()
+	}()
+    
+    // 如果定义了健康检查端口，则要启动一个http服务监听该端口
+    if opts.healthzPort &amp;gt; 0 {
+		// It&#39;s not super easy to shutdown the HTTP server so don&#39;t attempt to stop it cleanly
+		go mustRunHealthz()
+	}
+    
+    // 第二步：创建backend，并且通过该backend来注册subnet
+    // Create a backend manager then use it to create the backend and register the network with it.
+	bm := backend.NewManager(ctx, sm, extIface)
+	be, err := bm.GetBackend(config.BackendType)
+	if err != nil {
+		log.Errorf(&amp;quot;Error fetching backend: %s&amp;quot;, err)
+		cancel()
+		wg.Wait()
+		os.Exit(1)
+	}
+
+    // 注册subnet
+	bn, err := be.RegisterNetwork(ctx, wg, config)
+	if err != nil {
+		log.Errorf(&amp;quot;Error registering network: %s&amp;quot;, err)
+		cancel()
+		wg.Wait()
+		os.Exit(1)
+	}
+    
+    // 第三步：如果指定了ipMasq，则定期同步iptables
+    // Set up ipMasq if needed
+	if opts.ipMasq {
+		if err = recycleIPTables(config.Network, bn.Lease()); err != nil {
+			log.Errorf(&amp;quot;Failed to recycle IPTables rules, %v&amp;quot;, err)
+			cancel()
+			wg.Wait()
+			os.Exit(1)
+		}
+		log.Infof(&amp;quot;Setting up masking rules&amp;quot;)
+		go network.SetupAndEnsureIPTables(network.MasqRules(config.Network, bn.Lease()), opts.iptablesResyncSeconds)
+	}
+    
+    // 第四步：iptablesForwardRules指定的话，定期去同步指定的iptables
+    // Always enables forwarding rules. This is needed for Docker versions &amp;gt;1.13 (https://docs.docker.com/engine/userguide/networking/default_network/container-communication/#container-communication-between-hosts)
+	// In Docker 1.12 and earlier, the default FORWARD chain policy was ACCEPT.
+	// In Docker 1.13 and later, Docker sets the default policy of the FORWARD chain to DROP.
+	if opts.iptablesForwardRules {
+		log.Infof(&amp;quot;Changing default FORWARD chain policy to ACCEPT&amp;quot;)
+		go network.SetupAndEnsureIPTables(network.ForwardRules(config.Network.String()), opts.iptablesResyncSeconds)
+	}
+    
+    // 第五步：写入subnet file
+    if err := WriteSubnetFile(opts.subnetFile, config.Network, opts.ipMasq, bn); err != nil {
+		// Continue, even though it failed.
+		log.Warningf(&amp;quot;Failed to write subnet file: %s&amp;quot;, err)
+	} else {
+		log.Infof(&amp;quot;Wrote subnet file to %s&amp;quot;, opts.subnetFile)
+	}
+    
+    // 第六步：backend run起来
+    // Start &amp;quot;Running&amp;quot; the backend network. This will block until the context is done so run in another goroutine.
+	log.Info(&amp;quot;Running backend.&amp;quot;)
+	wg.Add(1)
+	go func() {
+		bn.Run(ctx)
+		wg.Done()
+	}()
+    
+    // 第七步：kube subnet mgr监听subnet lease
+    // Kube subnet mgr doesn&#39;t lease the subnet for this node - it just uses the podCidr that&#39;s already assigned.
+	if !opts.kubeSubnetMgr {
+		err = MonitorLease(ctx, sm, bn, &amp;amp;wg)
+		if err == errInterrupted {
+			// The lease was &amp;quot;revoked&amp;quot; - shut everything down
+			cancel()
+		}
+	}
+
+    
+    log.Info(&amp;quot;Waiting for all goroutines to exit&amp;quot;)
+	// Block waiting for all the goroutines to finish.
+	wg.Wait()
+	log.Info(&amp;quot;Exiting cleanly...&amp;quot;)
+	os.Exit(0)
+    
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;上述main函数中列出了7个主要的步骤，下面依次分析。&lt;/p&gt;
+
+&lt;h2 id=&#34;3-第一步-创建subnetmanager&#34;&gt;3.第一步：创建SubnetManager&lt;/h2&gt;
+
+&lt;p&gt;main.go中的newSubnetManager函数：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func newSubnetManager() (subnet.Manager, error) {
+	if opts.kubeSubnetMgr {
+		return kube.NewSubnetManager(opts.kubeApiUrl, opts.kubeConfigFile, opts.kubeAnnotationPrefix, opts.netConfPath)
+	}
+
+	cfg := &amp;amp;etcdv2.EtcdConfig{
+		Endpoints: strings.Split(opts.etcdEndpoints, &amp;quot;,&amp;quot;),
+		Keyfile:   opts.etcdKeyfile,
+		Certfile:  opts.etcdCertfile,
+		CAFile:    opts.etcdCAFile,
+		Prefix:    opts.etcdPrefix,
+		Username:  opts.etcdUsername,
+		Password:  opts.etcdPassword,
+	}
+
+	// Attempt to renew the lease for the subnet specified in the subnetFile
+	prevSubnet := ReadCIDRFromSubnetFile(opts.subnetFile, &amp;quot;FLANNEL_SUBNET&amp;quot;)
+
+	return etcdv2.NewLocalManager(cfg, prevSubnet)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;如果使用了kubeSubnetMgr，则调用kube.NewSubnetManager，否则调用etcdv2。这一点需要说明的是etcd发展到现在支持不同的版本，v2和v3，且v3版本具有很多优势。flannel仓库中v2版本相关的代码提交是2 years之前，因此可见目前flannel实际上只支持kube-apiserver作为后端存储。&lt;/p&gt;
+
+&lt;p&gt;./flannel/subnet/kube/kube.go：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;type kubeSubnetManager struct {
+	// 往node的yaml文件中添加的annotations
+	annotations    annotations
+	// 与kube-apiserver交互的client
+	client         clientset.Interface
+    // 运行在哪个node上
+	nodeName       string
+    // node lister
+	nodeStore      listers.NodeLister
+    // node controller
+	nodeController cache.Controller
+	subnetConf     *subnet.Config
+	events         chan subnet.Event
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;太多了，不想写了。。。&lt;/p&gt;
+</description>
+      
+    </item>
     
     <item>
       <title>手动创建vxlan网络连接container</title>
