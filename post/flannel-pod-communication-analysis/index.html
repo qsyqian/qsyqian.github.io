@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>Archive - Jane - A super concise theme for Hugo</title>
+  <title>Flannel 模式网络详解（vxlan） - Jane - A super concise theme for Hugo</title>
   
 
 <meta name="renderer" content="webkit" />
@@ -23,7 +23,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 
 <meta name="author" content="qsyqian" />
-  <meta name="description" content="Hugo theme jane example site." />
+  <meta name="description" content="Flannel 模式网络详解（vxlan） 本文主要分析vxlan作为backend的flannel，如何实现跨宿主机通信。 相关的flannel原理介绍的博" />
+
   <meta name="keywords" content="Hugo, theme, jane" />
 
 
@@ -34,8 +35,7 @@
 <meta name="generator" content="Hugo 0.56.3" />
 
 
-<link rel="canonical" href="http://qsyqian.github.io/post/" />
-<link href="%7balternate%20%7bRSS%20application/rss&#43;xml%20%20index%20alternate%20%20false%20false%20true%20false%20false%200%7d%20/post/index.xml%20http://qsyqian.github.io/post/index.xml%7d" rel="alternate" type="application/rss+xml" title="Jane - A super concise theme for Hugo" />
+<link rel="canonical" href="http://qsyqian.github.io/post/flannel-pod-communication-analysis/" />
 
 
 
@@ -57,18 +57,26 @@
 
 
 
-<meta property="og:title" content="Posts" />
-<meta property="og:description" content="Hugo theme jane example site." />
-<meta property="og:type" content="website" />
-<meta property="og:url" content="http://qsyqian.github.io/post/" />
+<meta property="og:title" content="Flannel 模式网络详解（vxlan）" />
+<meta property="og:description" content="Flannel 模式网络详解（vxlan） 本文主要分析vxlan作为backend的flannel，如何实现跨宿主机通信。 相关的flannel原理介绍的博" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="http://qsyqian.github.io/post/flannel-pod-communication-analysis/" />
+<meta property="article:published_time" content="2019-09-17T15:08:18+08:00" />
+<meta property="article:modified_time" content="2019-09-17T15:08:18+08:00" />
+<meta itemprop="name" content="Flannel 模式网络详解（vxlan）">
+<meta itemprop="description" content="Flannel 模式网络详解（vxlan） 本文主要分析vxlan作为backend的flannel，如何实现跨宿主机通信。 相关的flannel原理介绍的博">
 
-<meta property="og:updated_time" content="2019-09-17T15:08:18+08:00" />
-<meta itemprop="name" content="Posts">
-<meta itemprop="description" content="Hugo theme jane example site.">
 
+<meta itemprop="datePublished" content="2019-09-17T15:08:18&#43;08:00" />
+<meta itemprop="dateModified" content="2019-09-17T15:08:18&#43;08:00" />
+<meta itemprop="wordCount" content="2163">
+
+
+
+<meta itemprop="keywords" content="" />
 <meta name="twitter:card" content="summary"/>
-<meta name="twitter:title" content="Posts"/>
-<meta name="twitter:description" content="Hugo theme jane example site."/>
+<meta name="twitter:title" content="Flannel 模式网络详解（vxlan）"/>
+<meta name="twitter:description" content="Flannel 模式网络详解（vxlan） 本文主要分析vxlan作为backend的flannel，如何实现跨宿主机通信。 相关的flannel原理介绍的博"/>
 
 <!--[if lte IE 9]>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/classlist/1.1.20170427/classList.min.js"></script>
@@ -239,7 +247,7 @@
 
       </li>
     
-        <li class="menu-item active">
+        <li class="menu-item">
         
           
           
@@ -309,89 +317,299 @@
     <main id="main" class="main bg-llight">
       <div class="content-wrapper">
         <div id="content" class="content container">
-          
-<section id="archive" class="archive">
-    <div class="archive-title">
-      <span class="archive-post-counter">
-          4 posts In Total
-      </span>
-    </div>
+          <article class="post bg-white">
     
-      <div class="collection-title">
-        <h2 class="archive-year">2019</h2>
+    <header class="post-header">
+      <h1 class="post-title">Flannel 模式网络详解（vxlan）</h1>
+      
+      <div class="post-meta">
+        <time datetime="2019-09-17" class="post-time">
+          2019-09-17
+        </time>
+        
+        
+
+        
+        
+
+        
+        
       </div>
+    </header>
 
-    <div class="archive-post">
-      <time datetime="2019-09-17" class="archive-post-time">
-        2019-09-17
-      </time>
-      <span class="archive-post-title">
-        <a href="/post/flannel-pod-communication-analysis/" class="archive-post-link">
-          Flannel 模式网络详解（vxlan）
-        </a>
-      </span>
+    
+    
+<div class="post-toc" id="post-toc">
+  <h2 class="post-toc-title">Table of Contents</h2>
+  <div class="post-toc-content">
+    <nav id="TableOfContents">
+<ul>
+<li>
+<ul>
+<li><a href="#flannel-模式网络详解-vxlan">Flannel 模式网络详解（vxlan）</a>
+<ul>
+<li><a href="#环境介绍">环境介绍</a></li>
+<li><a href="#宿主机网络情况">宿主机网络情况</a>
+<ul>
+<li><a href="#flannel-1">flannel.1：</a></li>
+<li><a href="#cni0">cni0</a></li>
+<li><a href="#route信息">route信息</a></li>
+</ul></li>
+<li><a href="#容器内网络情况">容器内网络情况</a></li>
+<li><a href="#总结">总结</a></li>
+</ul></li>
+</ul></li>
+</ul>
+</nav>
+  </div>
+</div>
+
+    
+    <div class="post-content">
+      
+
+<h2 id="flannel-模式网络详解-vxlan">Flannel 模式网络详解（vxlan）</h2>
+
+<p>本文主要分析vxlan作为backend的flannel，如何实现跨宿主机通信。</p>
+
+<p>相关的flannel原理介绍的博客很多了，我就不分析原理，主要是介绍flannel安装完成之后，宿主机上的网络设备，以及跨宿主机的pod是如何实现一步步通信的。</p>
+
+<h3 id="环境介绍">环境介绍</h3>
+
+<p>本文使用的是三个节点的k8s，版本是1.13 。使用的flannel版本是0.10.0 。flannel配置的backend是vxlan。如下：</p>
+
+<pre><code class="language-shell"># kubectl get nodes
+NAME              STATUS   ROLES         AGE     VERSION
+sqian-k8s-node1   Ready    master,node   4h53m   v1.13.0
+sqian-k8s-node2   Ready    master,node   4h52m   v1.13.0
+sqian-k8s-node3   Ready    master,node   4h52m   v1.13.0
+# kubectl exec -it kube-flannel-4rrms  -n kube-system -- /opt/bin/flanneld -version            
+Defaulting container name to kube-flannel.
+Use 'kubectl describe pod/kube-flannel-4rrms -n kube-system' to see all of the containers in this pod.
+v0.10.0
+</code></pre>
+
+<h3 id="宿主机网络情况">宿主机网络情况</h3>
+
+<p>与flannel相关的几个虚拟网络上设备：</p>
+
+<ul>
+<li>flannel.1：这是一个vxlan设备。也就是耳熟能详的vteh设备，负责网络数据包的封包和解封。</li>
+<li>cni0：是一个linux bridge，用于连接同一个宿主机上的pod。</li>
+<li>vethf12090da@if3：容器内eth0网卡的对端设备，从名字上看，在容器内eth0网卡的编号应为3。</li>
+</ul>
+
+<p>下面再看下上述网络设备的网络信息：</p>
+
+<h4 id="flannel-1">flannel.1：</h4>
+
+<pre><code class="language-shell"># ifconfig flannel.1
+flannel.1: flags=4163&lt;UP,BROADCAST,RUNNING,MULTICAST&gt;  mtu 1450
+        inet 172.168.0.0  netmask 255.255.255.255  broadcast 0.0.0.0
+        inet6 fe80::e010:c0ff:fe12:aa5f  prefixlen 64  scopeid 0x20&lt;link&gt;
+        ether e2:10:c0:12:aa:5f  txqueuelen 0  (Ethernet)
+        RX packets 66  bytes 5544 (5.4 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 66  bytes 7524 (7.3 KiB)
+        TX errors 0  dropped 8 overruns 0  carrier 0  collisions 0
+</code></pre>
+
+<p>可以看到，flannel.1上有一个IP。（配置的容器的IP段位172.168.0.0/16），由于我们查看的node1上的flannel.1设备，而node1分配的subnet是172.168.0.0/24，该信息可以从node1的yaml文件中看到（这是因为默认的flannel使用的是kube subnet manager）。vxlan网络设备的原理这里不做赘述，感兴趣的可以看另外一篇<a href="https://qsyqian.github.io/post/linux-vxlan-implement/">博客</a>。</p>
+
+<p>查看node1的yaml文件：</p>
+
+<pre><code class="language-shell"># kubectl get node sqian-k8s-node1 -o yaml | grep flannel
+    flannel.alpha.coreos.com/backend-data: '{&quot;VtepMAC&quot;:&quot;e2:10:c0:12:aa:5f&quot;}'
+    flannel.alpha.coreos.com/backend-type: vxlan
+    flannel.alpha.coreos.com/kube-subnet-manager: &quot;true&quot;
+    flannel.alpha.coreos.com/public-ip: 10.212.36.168
+</code></pre>
+
+<p>可见flannel在每个node的yaml文件中存储了下述信息：</p>
+
+<ul>
+<li>flannel.alpha.coreos.com/backend-data: vteh设备（flannel.1）的mac地址</li>
+<li>flannel.alpha.coreos.com/backend-type: backend type</li>
+<li>flannel.alpha.coreos.com/kube-subnet-manager: true 采用kube subnet manager</li>
+<li>flannel.alpha.coreos.com/public-ip: 互联IP</li>
+</ul>
+
+<p>有了上述信息，flannel就可以在不同的node之间建立overlay网络，采用的就是vxlan技术。</p>
+
+<p>查看node1上的fdb表：</p>
+
+<pre><code class="language-shell"># bridge fdb  |grep flannel.1
+52:91:cb:aa:d1:bd dev flannel.1 dst 10.212.36.170 self permanent
+02:74:40:05:9f:87 dev flannel.1 dst 10.212.36.169 self permanent
+</code></pre>
+
+<p>上述是node1上的fdb表，分别是转发到node2上和node3上。最后的permanent表示该fdb永远不会超时。从这里可以看出，该fdb是通过flannel来维护的，当集群中有新的node加入时，其上的flannel会申请一个新的subnet，该信息会通知到所有的flannel节点上，flannel会在fdb表中追加新的内容。</p>
+
+<p>删除一个节点的话，同理。也是会从该fdb表中修改对应的条目。</p>
+
+<p>查看node1上flannel.1设备的neigh：</p>
+
+<pre><code class="language-shell"># ip neigh show dev flannel.1
+172.168.1.0 lladdr 02:74:40:05:9f:87 PERMANENT
+172.168.2.0 lladdr 52:91:cb:aa:d1:bd PERMANENT
+</code></pre>
+
+<p>其中172.168.1.0是node2上flannel.1的地址。</p>
+
+<p>172.168.2.0是node3上flannel.1的地址。</p>
+
+<h4 id="cni0">cni0</h4>
+
+<p>查看cni0的一些信息：</p>
+
+<pre><code class="language-shell"># brctl show cni0
+bridge name     bridge id               STP enabled     interfaces
+cni0            8000.0a58aca80001       no              veth0c81e625
+                                                        veth3752bd50
+                                                        vethf12090da
+</code></pre>
+
+<p>可见cni0是一个linux bridge设备，上面挂在了三个容器的网卡对端设备。</p>
+
+<p>查看其ip neigh：</p>
+
+<pre><code class="language-shell"># ip neigh show dev cni0
+172.168.0.5 lladdr 0a:58:ac:a8:00:05 STALE
+172.168.0.4 lladdr 0a:58:ac:a8:00:04 REACHABLE
+172.168.0.6 lladdr 0a:58:ac:a8:00:06 STALE
+</code></pre>
+
+<p>上述三个IP就是调度到该节点上的三个pod的IP。</p>
+
+<h4 id="route信息">route信息</h4>
+
+<p>最后来看一下宿主机上的路由信息</p>
+
+<pre><code class="language-shell"># ip r
+default via 10.212.36.254 dev eth0 ## 默认路由
+10.212.36.0/24 dev eth0  proto kernel  scope link  src 10.212.36.168 ## 宿主机网卡的路由
+169.254.0.0/16 dev eth0  scope link  metric 1002 
+172.17.0.0/16 dev docker0  proto kernel  scope link  src 172.17.0.1 
+172.168.0.0/24 dev cni0  proto kernel  scope link  src 172.168.0.1 ## （1）
+172.168.1.0/24 via 172.168.1.0 dev flannel.1 onlink ## （2） 
+172.168.2.0/24 via 172.168.2.0 dev flannel.1 onlink ## （3）
+</code></pre>
+
+<ul>
+<li>（1）：172.168.0.0/24是node1申请过来的subnet，理论上调度到该节点的pod都会从该C段地址内分配IP。因为所有的pod都是桥接到cni0上的，因此该条路由通过cni0转发给pod。</li>
+<li>（2）：172.168.1.0/24是node2申请过来的subnet，那么如果目的地址是该网段内的流量，则通过flannel.1设备发送给172.168.1.0，172.168.1.0是node2上的flannel.1的地址，flannel.1网卡将数据包vxlan封装之后发送给node2上的flannel.1。node1上的flannel.1是如何找到node2上的flannel.1呢，通过fdb表，上面已经说明。</li>
+<li>（3）同（2）。</li>
+</ul>
+
+<h3 id="容器内网络情况">容器内网络情况</h3>
+
+<p>下面进入容器查看一下：</p>
+
+<pre><code class="language-shell"># kubectl exec -it test-75b789cbdc-vdsg4 ip a
+1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default 
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+3: eth0@if12: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1450 qdisc noqueue state UP group default 
+    link/ether 0a:58:ac:a8:00:06 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 172.168.0.6/24 scope global eth0
+       valid_lft forever preferred_lft forever
+</code></pre>
+
+<p>容器内的eth0网卡具有IP地址172.168.0.6，在宿主机申请的IP段（172.168.0.0/24）内。</p>
+
+<p>查看容器内的路由信息：</p>
+
+<pre><code class="language-shell"># kubectl exec -it test-75b789cbdc-vdsg4 ip r
+default via 172.168.0.1 dev eth0 
+172.168.0.0/24 dev eth0 proto kernel scope link src 172.168.0.6 
+172.168.0.0/16 via 172.168.0.1 dev eth0 
+</code></pre>
+
+<p>默认网关是172.168.0.1，这个地址是在cni0上的，将网桥作为自己的网关。</p>
+
+<p>如果都是172.168.0.0/24段内的通信，则直接走172.168.0.6。</p>
+
+<p>整个pod段（172.168.0.0/16）内的通信，走网关（cni0）地址172.168.0.1 。</p>
+
+<h3 id="总结">总结</h3>
+
+<p>通过上述分析，集群内pod通信就很清晰了：</p>
+
+<ol>
+<li>如果是同一个节点上的pod通信，直接通过linux br转发即可；</li>
+<li>如果是跨节点pod通信，需要通过flannl.1 vxlan设备，封包之后发送给对端宿主机上的flannel.1设备。</li>
+</ol>
+
     </div>
+
+    
+    
+<div class="post-copyright">
+  <p class="copyright-item">
+    <span class="item-title">Author</span>
+    <span class="item-content">qsyqian</span>
+  </p>
+  <p class="copyright-item">
+    <span class="item-title">LastMod</span>
+    <span class="item-content">
+      2019-09-17
+      
+    </span>
+  </p>
+  
+  <p class="copyright-item">
+    <span class="item-title">License</span>
+    <span class="item-content"><a rel="license noopener" href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank">CC BY-NC-ND 4.0</a></span>
+  </p>
+</div>
+
+
+    
     
 
-    <div class="archive-post">
-      <time datetime="2019-09-12" class="archive-post-time">
-        2019-09-12
-      </time>
-      <span class="archive-post-title">
-        <a href="/post/flannel-source-code-analysis/" class="archive-post-link">
-          Flannel源码分析
-        </a>
-      </span>
-    </div>
+    <footer class="post-footer">
+      
+
+      
+      <nav class="post-nav">
+        
+        
+          <a class="next" href="/post/flannel-source-code-analysis/">
+            <span class="next-text nav-default">Flannel源码分析</span>
+            <span class="prev-text nav-mobile">Next</span>
+            
+            <i class="iconfont">
+              <svg class="icon" viewBox="0 0 1024 1024" version="1.1"
+  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+  width="18" height="18">
+  <path d="M332.091514 74.487481l-75.369571 89.491197c-10.963703 12.998035-10.285251 32.864502 1.499144 44.378743l286.278095 300.375162L266.565125 819.058374c-11.338233 12.190647-11.035334 32.285311 0.638543 44.850487l80.46666 86.564541c11.680017 12.583596 30.356378 12.893658 41.662889 0.716314l377.434212-421.426145c11.332093-12.183484 11.041474-32.266891-0.657986-44.844348l-80.46666-86.564541c-1.772366-1.910513-3.706415-3.533476-5.750981-4.877077L373.270379 71.774697C361.493148 60.273758 343.054193 61.470003 332.091514 74.487481z"></path>
+</svg>
+
+            </i>
+          </a>
+      </nav>
+    </footer>
+  </article>
+
+  
+  
+
+  
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
     
-
-    <div class="archive-post">
-      <time datetime="2019-08-27" class="archive-post-time">
-        2019-08-27
-      </time>
-      <span class="archive-post-title">
-        <a href="/post/linux-vxlan-implement/" class="archive-post-link">
-          手动创建vxlan网络连接container
-        </a>
-      </span>
-    </div>
-    
-
-    <div class="archive-post">
-      <time datetime="2019-08-14" class="archive-post-time">
-        2019-08-14
-      </time>
-      <span class="archive-post-title">
-        <a href="/post/use-hugo-deploy-blog/" class="archive-post-link">
-          使用hugo搭建博客
-        </a>
-      </span>
-    </div></section>
-
-
-
-
-
-
-  
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-  
-  
-
-
-
-
 
         </div>
       </div>

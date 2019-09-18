@@ -6,13 +6,198 @@
     <description>Recent content on Jane - A super concise theme for Hugo</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Thu, 12 Sep 2019 16:59:05 +0800</lastBuildDate>
+    <lastBuildDate>Tue, 17 Sep 2019 15:08:18 +0800</lastBuildDate>
     
         <atom:link href="http://qsyqian.github.io/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
-      <title>First</title>
+      <title>Flannel 模式网络详解（vxlan）</title>
+      <link>http://qsyqian.github.io/post/flannel-pod-communication-analysis/</link>
+      <pubDate>Tue, 17 Sep 2019 15:08:18 +0800</pubDate>
+      
+      <guid>http://qsyqian.github.io/post/flannel-pod-communication-analysis/</guid>
+      
+        <description>
+
+&lt;h2 id=&#34;flannel-模式网络详解-vxlan&#34;&gt;Flannel 模式网络详解（vxlan）&lt;/h2&gt;
+
+&lt;p&gt;本文主要分析vxlan作为backend的flannel，如何实现跨宿主机通信。&lt;/p&gt;
+
+&lt;p&gt;相关的flannel原理介绍的博客很多了，我就不分析原理，主要是介绍flannel安装完成之后，宿主机上的网络设备，以及跨宿主机的pod是如何实现一步步通信的。&lt;/p&gt;
+
+&lt;h3 id=&#34;环境介绍&#34;&gt;环境介绍&lt;/h3&gt;
+
+&lt;p&gt;本文使用的是三个节点的k8s，版本是1.13 。使用的flannel版本是0.10.0 。flannel配置的backend是vxlan。如下：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# kubectl get nodes
+NAME              STATUS   ROLES         AGE     VERSION
+sqian-k8s-node1   Ready    master,node   4h53m   v1.13.0
+sqian-k8s-node2   Ready    master,node   4h52m   v1.13.0
+sqian-k8s-node3   Ready    master,node   4h52m   v1.13.0
+# kubectl exec -it kube-flannel-4rrms  -n kube-system -- /opt/bin/flanneld -version            
+Defaulting container name to kube-flannel.
+Use &#39;kubectl describe pod/kube-flannel-4rrms -n kube-system&#39; to see all of the containers in this pod.
+v0.10.0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;宿主机网络情况&#34;&gt;宿主机网络情况&lt;/h3&gt;
+
+&lt;p&gt;与flannel相关的几个虚拟网络上设备：&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;flannel.1：这是一个vxlan设备。也就是耳熟能详的vteh设备，负责网络数据包的封包和解封。&lt;/li&gt;
+&lt;li&gt;cni0：是一个linux bridge，用于连接同一个宿主机上的pod。&lt;/li&gt;
+&lt;li&gt;vethf12090da@if3：容器内eth0网卡的对端设备，从名字上看，在容器内eth0网卡的编号应为3。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;下面再看下上述网络设备的网络信息：&lt;/p&gt;
+
+&lt;h4 id=&#34;flannel-1&#34;&gt;flannel.1：&lt;/h4&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# ifconfig flannel.1
+flannel.1: flags=4163&amp;lt;UP,BROADCAST,RUNNING,MULTICAST&amp;gt;  mtu 1450
+        inet 172.168.0.0  netmask 255.255.255.255  broadcast 0.0.0.0
+        inet6 fe80::e010:c0ff:fe12:aa5f  prefixlen 64  scopeid 0x20&amp;lt;link&amp;gt;
+        ether e2:10:c0:12:aa:5f  txqueuelen 0  (Ethernet)
+        RX packets 66  bytes 5544 (5.4 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 66  bytes 7524 (7.3 KiB)
+        TX errors 0  dropped 8 overruns 0  carrier 0  collisions 0
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;可以看到，flannel.1上有一个IP。（配置的容器的IP段位172.168.0.0/16），由于我们查看的node1上的flannel.1设备，而node1分配的subnet是172.168.0.0/24，该信息可以从node1的yaml文件中看到（这是因为默认的flannel使用的是kube subnet manager）。vxlan网络设备的原理这里不做赘述，感兴趣的可以看另外一篇&lt;a href=&#34;https://qsyqian.github.io/post/linux-vxlan-implement/&#34;&gt;博客&lt;/a&gt;。&lt;/p&gt;
+
+&lt;p&gt;查看node1的yaml文件：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# kubectl get node sqian-k8s-node1 -o yaml | grep flannel
+    flannel.alpha.coreos.com/backend-data: &#39;{&amp;quot;VtepMAC&amp;quot;:&amp;quot;e2:10:c0:12:aa:5f&amp;quot;}&#39;
+    flannel.alpha.coreos.com/backend-type: vxlan
+    flannel.alpha.coreos.com/kube-subnet-manager: &amp;quot;true&amp;quot;
+    flannel.alpha.coreos.com/public-ip: 10.212.36.168
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;可见flannel在每个node的yaml文件中存储了下述信息：&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;flannel.alpha.coreos.com/backend-data: vteh设备（flannel.1）的mac地址&lt;/li&gt;
+&lt;li&gt;flannel.alpha.coreos.com/backend-type: backend type&lt;/li&gt;
+&lt;li&gt;flannel.alpha.coreos.com/kube-subnet-manager: true 采用kube subnet manager&lt;/li&gt;
+&lt;li&gt;flannel.alpha.coreos.com/public-ip: 互联IP&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;有了上述信息，flannel就可以在不同的node之间建立overlay网络，采用的就是vxlan技术。&lt;/p&gt;
+
+&lt;p&gt;查看node1上的fdb表：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# bridge fdb  |grep flannel.1
+52:91:cb:aa:d1:bd dev flannel.1 dst 10.212.36.170 self permanent
+02:74:40:05:9f:87 dev flannel.1 dst 10.212.36.169 self permanent
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;上述是node1上的fdb表，分别是转发到node2上和node3上。最后的permanent表示该fdb永远不会超时。从这里可以看出，该fdb是通过flannel来维护的，当集群中有新的node加入时，其上的flannel会申请一个新的subnet，该信息会通知到所有的flannel节点上，flannel会在fdb表中追加新的内容。&lt;/p&gt;
+
+&lt;p&gt;删除一个节点的话，同理。也是会从该fdb表中修改对应的条目。&lt;/p&gt;
+
+&lt;p&gt;查看node1上flannel.1设备的neigh：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# ip neigh show dev flannel.1
+172.168.1.0 lladdr 02:74:40:05:9f:87 PERMANENT
+172.168.2.0 lladdr 52:91:cb:aa:d1:bd PERMANENT
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;其中172.168.1.0是node2上flannel.1的地址。&lt;/p&gt;
+
+&lt;p&gt;172.168.2.0是node3上flannel.1的地址。&lt;/p&gt;
+
+&lt;h4 id=&#34;cni0&#34;&gt;cni0&lt;/h4&gt;
+
+&lt;p&gt;查看cni0的一些信息：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# brctl show cni0
+bridge name     bridge id               STP enabled     interfaces
+cni0            8000.0a58aca80001       no              veth0c81e625
+                                                        veth3752bd50
+                                                        vethf12090da
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;可见cni0是一个linux bridge设备，上面挂在了三个容器的网卡对端设备。&lt;/p&gt;
+
+&lt;p&gt;查看其ip neigh：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# ip neigh show dev cni0
+172.168.0.5 lladdr 0a:58:ac:a8:00:05 STALE
+172.168.0.4 lladdr 0a:58:ac:a8:00:04 REACHABLE
+172.168.0.6 lladdr 0a:58:ac:a8:00:06 STALE
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;上述三个IP就是调度到该节点上的三个pod的IP。&lt;/p&gt;
+
+&lt;h4 id=&#34;route信息&#34;&gt;route信息&lt;/h4&gt;
+
+&lt;p&gt;最后来看一下宿主机上的路由信息&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# ip r
+default via 10.212.36.254 dev eth0 ## 默认路由
+10.212.36.0/24 dev eth0  proto kernel  scope link  src 10.212.36.168 ## 宿主机网卡的路由
+169.254.0.0/16 dev eth0  scope link  metric 1002 
+172.17.0.0/16 dev docker0  proto kernel  scope link  src 172.17.0.1 
+172.168.0.0/24 dev cni0  proto kernel  scope link  src 172.168.0.1 ## （1）
+172.168.1.0/24 via 172.168.1.0 dev flannel.1 onlink ## （2） 
+172.168.2.0/24 via 172.168.2.0 dev flannel.1 onlink ## （3）
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ul&gt;
+&lt;li&gt;（1）：172.168.0.0/24是node1申请过来的subnet，理论上调度到该节点的pod都会从该C段地址内分配IP。因为所有的pod都是桥接到cni0上的，因此该条路由通过cni0转发给pod。&lt;/li&gt;
+&lt;li&gt;（2）：172.168.1.0/24是node2申请过来的subnet，那么如果目的地址是该网段内的流量，则通过flannel.1设备发送给172.168.1.0，172.168.1.0是node2上的flannel.1的地址，flannel.1网卡将数据包vxlan封装之后发送给node2上的flannel.1。node1上的flannel.1是如何找到node2上的flannel.1呢，通过fdb表，上面已经说明。&lt;/li&gt;
+&lt;li&gt;（3）同（2）。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;容器内网络情况&#34;&gt;容器内网络情况&lt;/h3&gt;
+
+&lt;p&gt;下面进入容器查看一下：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# kubectl exec -it test-75b789cbdc-vdsg4 ip a
+1: lo: &amp;lt;LOOPBACK,UP,LOWER_UP&amp;gt; mtu 65536 qdisc noqueue state UNKNOWN group default 
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+3: eth0@if12: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP&amp;gt; mtu 1450 qdisc noqueue state UP group default 
+    link/ether 0a:58:ac:a8:00:06 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 172.168.0.6/24 scope global eth0
+       valid_lft forever preferred_lft forever
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;容器内的eth0网卡具有IP地址172.168.0.6，在宿主机申请的IP段（172.168.0.0/24）内。&lt;/p&gt;
+
+&lt;p&gt;查看容器内的路由信息：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# kubectl exec -it test-75b789cbdc-vdsg4 ip r
+default via 172.168.0.1 dev eth0 
+172.168.0.0/24 dev eth0 proto kernel scope link src 172.168.0.6 
+172.168.0.0/16 via 172.168.0.1 dev eth0 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;默认网关是172.168.0.1，这个地址是在cni0上的，将网桥作为自己的网关。&lt;/p&gt;
+
+&lt;p&gt;如果都是172.168.0.0/24段内的通信，则直接走172.168.0.6。&lt;/p&gt;
+
+&lt;p&gt;整个pod段（172.168.0.0/16）内的通信，走网关（cni0）地址172.168.0.1 。&lt;/p&gt;
+
+&lt;h3 id=&#34;总结&#34;&gt;总结&lt;/h3&gt;
+
+&lt;p&gt;通过上述分析，集群内pod通信就很清晰了：&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;如果是同一个节点上的pod通信，直接通过linux br转发即可；&lt;/li&gt;
+&lt;li&gt;如果是跨节点pod通信，需要通过flannl.1 vxlan设备，封包之后发送给对端宿主机上的flannel.1设备。&lt;/li&gt;
+&lt;/ol&gt;
+</description>
+      
+    </item>
+    
+    <item>
+      <title>Flannel源码分析</title>
       <link>http://qsyqian.github.io/post/flannel-source-code-analysis/</link>
       <pubDate>Thu, 12 Sep 2019 16:59:05 +0800</pubDate>
       

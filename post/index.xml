@@ -6,13 +6,22 @@
     <description>Recent content in Posts on Jane - A super concise theme for Hugo</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Thu, 12 Sep 2019 16:59:05 +0800</lastBuildDate>
+    <lastBuildDate>Tue, 17 Sep 2019 15:08:18 +0800</lastBuildDate>
     
 	<atom:link href="http://qsyqian.github.io/post/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
-      <title>First</title>
+      <title>Flannel 模式网络详解（vxlan）</title>
+      <link>http://qsyqian.github.io/post/flannel-pod-communication-analysis/</link>
+      <pubDate>Tue, 17 Sep 2019 15:08:18 +0800</pubDate>
+      
+      <guid>http://qsyqian.github.io/post/flannel-pod-communication-analysis/</guid>
+      <description>Flannel 模式网络详解（vxlan） 本文主要分析vxlan作为backend的flannel，如何实现跨宿主机通信。 相关的flannel原理介绍的博</description>
+    </item>
+    
+    <item>
+      <title>Flannel源码分析</title>
       <link>http://qsyqian.github.io/post/flannel-source-code-analysis/</link>
       <pubDate>Thu, 12 Sep 2019 16:59:05 +0800</pubDate>
       
