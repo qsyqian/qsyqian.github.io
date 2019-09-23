@@ -534,7 +534,7 @@ drwxr-xr-x 1 user 197121    0 8月  30 18:33 version/
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;如果使用了kubeSubnetMgr，则调用kube.NewSubnetManager，否则调用etcdv2。这一点需要说明的是etcd发展到现在支持不同的版本，v2和v3，且v3版本具有很多优势。flannel仓库中v2版本相关的代码提交是2 years之前，因此可见目前flannel实际上只支持kube-apiserver作为后端存储。&lt;/p&gt;
+&lt;p&gt;如果使用了kubeSubnetMgr，则调用kube.NewSubnetManager，否则调用etcdv2。这一点需要说明的是etcd发展到现在支持不同的版本，v2和v3，且v3版本具有很多优势。flannel仓库中v2版本相关的代码提交是2 years之前，因此可见目前flannel实际上只支持kube-apiserver作为后端存储，也是默认的存储方式。&lt;/p&gt;
 
 &lt;p&gt;./flannel/subnet/kube/kube.go：&lt;/p&gt;
 
@@ -554,7 +554,286 @@ drwxr-xr-x 1 user 197121    0 8月  30 18:33 version/
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;太多了，不想写了。。。&lt;/p&gt;
+&lt;p&gt;下面进入flannel/subnet/kube/kube.go里的NewSubnetManager函数中，看看都干了啥：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func NewSubnetManager(apiUrl, kubeconfig, prefix, netConfPath string) (subnet.Manager, error) {
+	//先看看入参函数：kube-apiserver的地址，kubeconfig的地址，prefix是给node打anno的时候前缀，netConfPath是配置存储目录，实际上安装完成之后，是通过configmap的形式挂载到/etc/kube-flannel/net-conf.json里的
+	var cfg *rest.Config
+	var err error
+	// Try to build kubernetes config from a master url or a kubeconfig filepath. If neither masterUrl
+	// or kubeconfigPath are passed in we fall back to inClusterConfig. If inClusterConfig fails,
+	// we fallback to the default config.
+	cfg, err = clientcmd.BuildConfigFromFlags(apiUrl, kubeconfig)
+	if err != nil {
+		return nil, fmt.Errorf(&amp;quot;fail to create kubernetes config: %v&amp;quot;, err)
+	}
+
+	c, err := clientset.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf(&amp;quot;unable to initialize client: %v&amp;quot;, err)
+	}
+    // 上述是通过提供的配置，创建clientset，用来连接kube-apiserver
+
+	// The kube subnet mgr needs to know the k8s node name that it&#39;s running on so it can annotate it.
+	// If we&#39;re running as a pod then the POD_NAME and POD_NAMESPACE will be populated and can be used to find the node
+	// name. Otherwise, the environment variable NODE_NAME can be passed in.
+	// 获取nodename
+    nodeName := os.Getenv(&amp;quot;NODE_NAME&amp;quot;)
+	if nodeName == &amp;quot;&amp;quot; {
+		podName := os.Getenv(&amp;quot;POD_NAME&amp;quot;)
+		podNamespace := os.Getenv(&amp;quot;POD_NAMESPACE&amp;quot;)
+		if podName == &amp;quot;&amp;quot; || podNamespace == &amp;quot;&amp;quot; {
+			return nil, fmt.Errorf(&amp;quot;env variables POD_NAME and POD_NAMESPACE must be set&amp;quot;)
+		}
+
+		pod, err := c.Pods(podNamespace).Get(podName, metav1.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf(&amp;quot;error retrieving pod spec for &#39;%s/%s&#39;: %v&amp;quot;, podNamespace, podName, err)
+		}
+		nodeName = pod.Spec.NodeName
+		if nodeName == &amp;quot;&amp;quot; {
+			return nil, fmt.Errorf(&amp;quot;node name not present in pod spec &#39;%s/%s&#39;&amp;quot;, podNamespace, podName)
+		}
+	}
+
+    // 读取网络配置文件
+	netConf, err := ioutil.ReadFile(netConfPath)
+	if err != nil {
+		return nil, fmt.Errorf(&amp;quot;failed to read net conf: %v&amp;quot;, err)
+	}
+
+    // 解析网络配置
+	sc, err := subnet.ParseConfig(string(netConf))
+	if err != nil {
+		return nil, fmt.Errorf(&amp;quot;error parsing subnet config: %s&amp;quot;, err)
+	}
+
+    // 初始化并运行subnetManager，传入的参数有clientset，网络配置，nodename，anno前缀，具体的new和Run函数下文分析
+	sm, err := newKubeSubnetManager(c, sc, nodeName, prefix)
+	if err != nil {
+		return nil, fmt.Errorf(&amp;quot;error creating network manager: %s&amp;quot;, err)
+	}
+	go sm.Run(context.Background())
+
+    // 下面确保hasSynced
+	glog.Infof(&amp;quot;Waiting %s for node controller to sync&amp;quot;, nodeControllerSyncTimeout)
+	err = wait.Poll(time.Second, nodeControllerSyncTimeout, func() (bool, error) {
+		return sm.nodeController.HasSynced(), nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf(&amp;quot;error waiting for nodeController to sync state: %v&amp;quot;, err)
+	}
+	glog.Infof(&amp;quot;Node controller sync successful&amp;quot;)
+
+	return sm, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;下面去看看如何newKubeSubnetManager和让其Run起来的。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func newKubeSubnetManager(c clientset.Interface, sc *subnet.Config, nodeName, prefix string) (*kubeSubnetManager, error) {
+   var err error
+   var ksm kubeSubnetManager
+   ksm.annotations, err = newAnnotations(prefix)
+   if err != nil {
+      return nil, err
+   }
+   ksm.client = c
+   ksm.nodeName = nodeName
+   ksm.subnetConf = sc
+   ksm.events = make(chan subnet.Event, 5000)
+   indexer, controller := cache.NewIndexerInformer(
+      &amp;amp;cache.ListWatch{
+         ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+            return ksm.client.CoreV1().Nodes().List(options)
+         },
+         WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+            return ksm.client.CoreV1().Nodes().Watch(options)
+         },
+      },
+      &amp;amp;v1.Node{},
+      resyncPeriod,
+      cache.ResourceEventHandlerFuncs{
+         AddFunc: func(obj interface{}) {
+            ksm.handleAddLeaseEvent(subnet.EventAdded, obj)
+         },
+         UpdateFunc: ksm.handleUpdateLeaseEvent,
+         DeleteFunc: func(obj interface{}) {
+            node, isNode := obj.(*v1.Node)
+            // We can get DeletedFinalStateUnknown instead of *api.Node here and we need to handle that correctly.
+            if !isNode {
+               deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+               if !ok {
+                  glog.Infof(&amp;quot;Error received unexpected object: %v&amp;quot;, obj)
+                  return
+               }
+               node, ok = deletedState.Obj.(*v1.Node)
+               if !ok {
+                  glog.Infof(&amp;quot;Error deletedFinalStateUnknown contained non-Node object: %v&amp;quot;, deletedState.Obj)
+                  return
+               }
+               obj = node
+            }
+            ksm.handleAddLeaseEvent(subnet.EventRemoved, obj)
+         },
+      },
+      cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+   )
+   ksm.nodeController = controller
+   ksm.nodeStore = listers.NewNodeLister(indexer)
+   return &amp;amp;ksm, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;总结一下上述函数都干了啥：&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;初始化kubeSubnetManager&lt;/li&gt;
+&lt;li&gt;ksm主要是对集群中node进行监听，因为flannel是根据node来划分网段的&lt;/li&gt;
+&lt;li&gt;根据监听到的node的事件，放入到ksm的events channel中&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;此外，ksm.Run函数就是运行起来。&lt;/p&gt;
+
+&lt;h2 id=&#34;4-第二步-创建backend&#34;&gt;4.第二步：创建backend&lt;/h2&gt;
+
+&lt;p&gt;首先看backend/manager.go中的NewManager函数&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func NewManager(ctx context.Context, sm subnet.Manager, extIface *ExternalInterface) Manager {
+   return &amp;amp;manager{
+      ctx:      ctx,
+      sm:       sm,
+      extIface: extIface,
+      active:   make(map[string]Backend),
+   }
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;只是返回了一个manager对象：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;type manager struct {
+   ctx      context.Context
+    // 上文创建好的ksm
+   sm       subnet.Manager
+    // 用来与外界通信的interface
+   extIface *ExternalInterface
+    // 互斥锁
+   mux      sync.Mutex
+   active   map[string]Backend
+   wg       sync.WaitGroup
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;下面看bm.GetBackend(config.BackendType)函数：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (bm *manager) GetBackend(backendType string) (Backend, error) {
+    //传入的参数是config的BackendType，此配置项是通过configmap写入到flannel的pod中的，因此是一个固定的值，比如vxlan
+   bm.mux.Lock()
+   defer bm.mux.Unlock()
+
+   betype := strings.ToLower(backendType)
+   // see if one is already running
+   if be, ok := bm.active[betype]; ok {
+      return be, nil
+   }
+
+   // first request, need to create and run it
+   befunc, ok := constructors[betype]
+   if !ok {
+      return nil, fmt.Errorf(&amp;quot;unknown backend type: %v&amp;quot;, betype)
+   }
+
+   be, err := befunc(bm.sm, bm.extIface)
+   if err != nil {
+      return nil, err
+   }
+   bm.active[betype] = be
+
+   bm.wg.Add(1)
+   go func() {
+      &amp;lt;-bm.ctx.Done()
+
+      // TODO(eyakubovich): this obviosly introduces a race.
+      // GetBackend() could get called while we are here.
+      // Currently though, all backends&#39; Run exit only
+      // on shutdown
+
+      bm.mux.Lock()
+      delete(bm.active, betype)
+      bm.mux.Unlock()
+
+      bm.wg.Done()
+   }()
+
+   return be, nil
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;main.go的289行bn, err := be.RegisterNetwork(ctx, wg, config)，实际上调用的是具体的backend的Register，比如配置了vxlan就调用vxlan的register：&lt;/p&gt;
+
+&lt;p&gt;flannel/backend/vxlan/vxlan.go:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (be *VXLANBackend) RegisterNetwork(ctx context.Context, wg sync.WaitGroup, config *subnet.Config) (backend.Network, error) {
+   // Parse our configuration
+   cfg := struct {
+      VNI           int
+      Port          int
+      GBP           bool
+      Learning      bool
+      DirectRouting bool
+   }{
+      VNI: defaultVNI,
+   }
+
+   if len(config.Backend) &amp;gt; 0 {
+      if err := json.Unmarshal(config.Backend, &amp;amp;cfg); err != nil {
+         return nil, fmt.Errorf(&amp;quot;error decoding VXLAN backend config: %v&amp;quot;, err)
+      }
+   }
+   log.Infof(&amp;quot;VXLAN config: VNI=%d Port=%d GBP=%v Learning=%v DirectRouting=%v&amp;quot;, cfg.VNI, cfg.Port, cfg.GBP, cfg.Learning, cfg.DirectRouting)
+
+   devAttrs := vxlanDeviceAttrs{
+      vni:       uint32(cfg.VNI),
+      name:      fmt.Sprintf(&amp;quot;flannel.%v&amp;quot;, cfg.VNI),
+      vtepIndex: be.extIface.Iface.Index,
+      vtepAddr:  be.extIface.IfaceAddr,
+      vtepPort:  cfg.Port,
+      gbp:       cfg.GBP,
+      learning:  cfg.Learning,
+   }
+
+   dev, err := newVXLANDevice(&amp;amp;devAttrs)
+   if err != nil {
+      return nil, err
+   }
+   dev.directRouting = cfg.DirectRouting
+
+   subnetAttrs, err := newSubnetAttrs(be.extIface.ExtAddr, dev.MACAddr())
+   if err != nil {
+      return nil, err
+   }
+
+   lease, err := be.subnetMgr.AcquireLease(ctx, subnetAttrs)
+   switch err {
+   case nil:
+   case context.Canceled, context.DeadlineExceeded:
+      return nil, err
+   default:
+      return nil, fmt.Errorf(&amp;quot;failed to acquire lease: %v&amp;quot;, err)
+   }
+
+   // Ensure that the device has a /32 address so that no broadcast routes are created.
+   // This IP is just used as a source address for host to workload traffic (so
+   // the return path for the traffic has an address on the flannel network to use as the destination)
+   if err := dev.Configure(ip.IP4Net{IP: lease.Subnet.IP, PrefixLen: 32}); err != nil {
+      return nil, fmt.Errorf(&amp;quot;failed to configure interface %s: %s&amp;quot;, dev.link.Attrs().Name, err)
+   }
+
+   return newNetwork(be.subnetMgr, be.extIface, dev, ip.IP4Net{}, lease)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;该函数主要是创建vxlan设备。配置对应的路由，给vxlan设备配置IP信息等等。&lt;/p&gt;
 </description>
       
     </item>
