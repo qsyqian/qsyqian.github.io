@@ -6,10 +6,19 @@
     <description>Recent content in Posts on Jane - A super concise theme for Hugo</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Tue, 17 Sep 2019 15:08:18 +0800</lastBuildDate>
+    <lastBuildDate>Mon, 07 Oct 2019 14:38:01 +0800</lastBuildDate>
     
 	<atom:link href="http://qsyqian.github.io/post/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>K8s 从懵圈到熟练 – 集群网络详解【转载阿里云公众号】</title>
+      <link>http://qsyqian.github.io/post/k8s-cluster-network/</link>
+      <pubDate>Mon, 07 Oct 2019 14:38:01 +0800</pubDate>
+      
+      <guid>http://qsyqian.github.io/post/k8s-cluster-network/</guid>
+      <description>K8s 从懵圈到熟练 – 集群网络详解 导读： 阿里云 K8S 集群网络目前有两种方案：一种是 flannel 方案；另外一种是基于 calico 和弹性网卡 eni 的 terway 方案。Terway 和 flannel 类似，</description>
+    </item>
     
     <item>
       <title>Flannel 模式网络详解（vxlan）</title>
