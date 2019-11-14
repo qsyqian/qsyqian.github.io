@@ -6,10 +6,19 @@
     <description>Recent content in Posts on Jane - A super concise theme for Hugo</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Mon, 07 Oct 2019 14:38:01 +0800</lastBuildDate>
+    <lastBuildDate>Thu, 14 Nov 2019 09:41:10 +0800</lastBuildDate>
     
 	<atom:link href="http://qsyqian.github.io/post/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>ovs中debug数据包流向</title>
+      <link>http://qsyqian.github.io/post/ovs-trace-usage/</link>
+      <pubDate>Thu, 14 Nov 2019 09:41:10 +0800</pubDate>
+      
+      <guid>http://qsyqian.github.io/post/ovs-trace-usage/</guid>
+      <description>ovs中debug数据包流向 ovs是一个可编程软件交换机，因此它可以在数据包级别做动作。本文主要介绍了如何使用trace工具来跟踪数据包在d</description>
+    </item>
     
     <item>
       <title>K8s 从懵圈到熟练 – 集群网络详解【转载阿里云公众号】</title>

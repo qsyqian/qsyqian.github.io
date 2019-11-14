@@ -3,20 +3,27 @@
   
   <url>
     <loc>http://qsyqian.github.io/</loc>
-    <lastmod>2019-10-07T14:38:01+08:00</lastmod>
+    <lastmod>2019-11-14T09:41:10+08:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   
   <url>
-    <loc>http://qsyqian.github.io/post/k8s-cluster-network/</loc>
-    <lastmod>2019-10-07T14:38:01+08:00</lastmod>
+    <loc>http://qsyqian.github.io/post/ovs-trace-usage/</loc>
+    <lastmod>2019-11-14T09:41:10+08:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   
   <url>
     <loc>http://qsyqian.github.io/post/</loc>
+    <lastmod>2019-11-14T09:41:10+08:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  
+  <url>
+    <loc>http://qsyqian.github.io/post/k8s-cluster-network/</loc>
     <lastmod>2019-10-07T14:38:01+08:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
