@@ -69,7 +69,7 @@
 
 <meta itemprop="datePublished" content="2019-08-14T10:50:41&#43;08:00" />
 <meta itemprop="dateModified" content="2019-08-14T10:50:41&#43;08:00" />
-<meta itemprop="wordCount" content="1494">
+<meta itemprop="wordCount" content="1762">
 
 
 
@@ -352,7 +352,8 @@
 <li><a href="#四-安装主题">四、安装主题</a></li>
 <li><a href="#五-本地预览">五、本地预览</a></li>
 <li><a href="#六-发布">六、发布</a></li>
-<li><a href="#七-参考链接">七、参考链接</a></li>
+<li><a href="#七-换电脑了如何继续">七、换电脑了如何继续</a></li>
+<li><a href="#八-参考链接">八、参考链接</a></li>
 </ul></li>
 </ul>
 </nav>
@@ -485,7 +486,26 @@ $ git push -u origin master
 
 <p>​   上述工作全部做完之后，大概过1-2分钟之后，访问自己的博客站点<code>qsyqian.github.io</code>就可以看到自己的博客站点啦。撒花~</p>
 
-<h2 id="七-参考链接">七、参考链接</h2>
+<h2 id="七-换电脑了如何继续">七、换电脑了如何继续</h2>
+
+<p>​   一般上换了电脑之后，首先要clone我们的博客源文件代码仓库到本地，里面是我们写的博客的md文件的源文件；此外在该目录下clone我们的qsyqian.github.io仓库到该源码仓库的根目录下，并重命名为public。</p>
+
+<p>​   然后就可以按照上述步骤新建博客，生成博客，发布博客了。</p>
+
+<pre><code class="language-shell"># git clone git@github.com:qsyqian/blog.git
+# cd blog
+# git clone git@github.com:qsyqian/qsyqian.github.io.git
+# mv qsyqian.github.io public
+# hugo new post/xxx.md
+# ....edit xxx.md....
+# hugo server --theme=jane  #本地预览
+# hugo --theme=jane  #编译博客
+# 在blog目录下git add . &amp;&amp; git commit &amp;&amp; git push,源码文件要push到远程
+# 在public目录下git add . &amp;&amp; git commit &amp;&amp; git push，生成的博客静态文件要push到远程
+
+</code></pre>
+
+<h2 id="八-参考链接">八、参考链接</h2>
 
 <ol>
 <li><a href="https://www.gohugo.org/">https://www.gohugo.org/</a></li>
