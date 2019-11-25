@@ -1,2 +1,2 @@
 User-agent: *
-Sitemap: http://qsyqian.github.io/sitemap.xml
+Sitemap: https://qsyqian.github.io/sitemap.xml

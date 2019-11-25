@@ -1,67 +1,67 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>Posts on Jane - A super concise theme for Hugo</title>
-    <link>http://qsyqian.github.io/post/</link>
-    <description>Recent content in Posts on Jane - A super concise theme for Hugo</description>
+    <title>Posts on To be a programer. Not just to be a programer.</title>
+    <link>https://qsyqian.github.io/post/</link>
+    <description>Recent content in Posts on To be a programer. Not just to be a programer.</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
     <lastBuildDate>Thu, 14 Nov 2019 09:41:10 +0800</lastBuildDate>
     
-	<atom:link href="http://qsyqian.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+	<atom:link href="https://qsyqian.github.io/post/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
       <title>ovs中debug数据包流向</title>
-      <link>http://qsyqian.github.io/post/ovs-trace-usage/</link>
+      <link>https://qsyqian.github.io/post/ovs-trace-usage/</link>
       <pubDate>Thu, 14 Nov 2019 09:41:10 +0800</pubDate>
       
-      <guid>http://qsyqian.github.io/post/ovs-trace-usage/</guid>
+      <guid>https://qsyqian.github.io/post/ovs-trace-usage/</guid>
       <description>ovs中debug数据包流向 ovs是一个可编程软件交换机，因此它可以在数据包级别做动作。本文主要介绍了如何使用trace工具来跟踪数据包在d</description>
     </item>
     
     <item>
       <title>K8s 从懵圈到熟练 – 集群网络详解【转载阿里云公众号】</title>
-      <link>http://qsyqian.github.io/post/k8s-cluster-network/</link>
+      <link>https://qsyqian.github.io/post/k8s-cluster-network/</link>
       <pubDate>Mon, 07 Oct 2019 14:38:01 +0800</pubDate>
       
-      <guid>http://qsyqian.github.io/post/k8s-cluster-network/</guid>
+      <guid>https://qsyqian.github.io/post/k8s-cluster-network/</guid>
       <description>K8s 从懵圈到熟练 – 集群网络详解 导读： 阿里云 K8S 集群网络目前有两种方案：一种是 flannel 方案；另外一种是基于 calico 和弹性网卡 eni 的 terway 方案。Terway 和 flannel 类似，</description>
     </item>
     
     <item>
       <title>Flannel 模式网络详解（vxlan）</title>
-      <link>http://qsyqian.github.io/post/flannel-pod-communication-analysis/</link>
+      <link>https://qsyqian.github.io/post/flannel-pod-communication-analysis/</link>
       <pubDate>Tue, 17 Sep 2019 15:08:18 +0800</pubDate>
       
-      <guid>http://qsyqian.github.io/post/flannel-pod-communication-analysis/</guid>
+      <guid>https://qsyqian.github.io/post/flannel-pod-communication-analysis/</guid>
       <description>Flannel 模式网络详解（vxlan） 本文主要分析vxlan作为backend的flannel，如何实现跨宿主机通信。 相关的flannel原理介绍的博</description>
     </item>
     
     <item>
       <title>Flannel源码分析</title>
-      <link>http://qsyqian.github.io/post/flannel-source-code-analysis/</link>
+      <link>https://qsyqian.github.io/post/flannel-source-code-analysis/</link>
       <pubDate>Thu, 12 Sep 2019 16:59:05 +0800</pubDate>
       
-      <guid>http://qsyqian.github.io/post/flannel-source-code-analysis/</guid>
+      <guid>https://qsyqian.github.io/post/flannel-source-code-analysis/</guid>
       <description>Flannel源码分析 前言 flannel作为kubernetes的一种网络解决方案，在社区是比较活跃的。支持多种backend。 flanne</description>
     </item>
     
     <item>
       <title>手动创建vxlan网络连接container</title>
-      <link>http://qsyqian.github.io/post/linux-vxlan-implement/</link>
+      <link>https://qsyqian.github.io/post/linux-vxlan-implement/</link>
       <pubDate>Tue, 27 Aug 2019 10:57:51 +0800</pubDate>
       
-      <guid>http://qsyqian.github.io/post/linux-vxlan-implement/</guid>
+      <guid>https://qsyqian.github.io/post/linux-vxlan-implement/</guid>
       <description>手动创建vxlan网络连接container ​ 本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。</description>
     </item>
     
     <item>
       <title>使用hugo搭建博客</title>
-      <link>http://qsyqian.github.io/post/use-hugo-deploy-blog/</link>
+      <link>https://qsyqian.github.io/post/use-hugo-deploy-blog/</link>
       <pubDate>Wed, 14 Aug 2019 10:50:41 +0800</pubDate>
       
-      <guid>http://qsyqian.github.io/post/use-hugo-deploy-blog/</guid>
+      <guid>https://qsyqian.github.io/post/use-hugo-deploy-blog/</guid>
       <description>使用hugo和github搭建博客 一、安装hugo ​ 去hugo下载地址下载所需要的版本的hugo软件，如果是windows的就下载对应的压缩</description>
     </item>
     

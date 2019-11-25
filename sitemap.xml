@@ -1,77 +1,77 @@
-<?xml-stylesheet type="text/xsl" href="http://qsyqian.github.io/sitemap.xsl"?>
+<?xml-stylesheet type="text/xsl" href="https://qsyqian.github.io/sitemap.xsl"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
-    <loc>http://qsyqian.github.io/</loc>
+    <loc>https://qsyqian.github.io/post/ovs-trace-usage/</loc>
     <lastmod>2019-11-14T09:41:10+08:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   
   <url>
-    <loc>http://qsyqian.github.io/post/ovs-trace-usage/</loc>
+    <loc>https://qsyqian.github.io/post/</loc>
     <lastmod>2019-11-14T09:41:10+08:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   
   <url>
-    <loc>http://qsyqian.github.io/post/</loc>
+    <loc>https://qsyqian.github.io/</loc>
     <lastmod>2019-11-14T09:41:10+08:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   
   <url>
-    <loc>http://qsyqian.github.io/post/k8s-cluster-network/</loc>
+    <loc>https://qsyqian.github.io/post/k8s-cluster-network/</loc>
     <lastmod>2019-10-07T14:38:01+08:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   
   <url>
-    <loc>http://qsyqian.github.io/post/flannel-pod-communication-analysis/</loc>
+    <loc>https://qsyqian.github.io/post/flannel-pod-communication-analysis/</loc>
     <lastmod>2019-09-17T15:08:18+08:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   
   <url>
-    <loc>http://qsyqian.github.io/post/flannel-source-code-analysis/</loc>
+    <loc>https://qsyqian.github.io/post/flannel-source-code-analysis/</loc>
     <lastmod>2019-09-12T16:59:05+08:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   
   <url>
-    <loc>http://qsyqian.github.io/post/linux-vxlan-implement/</loc>
+    <loc>https://qsyqian.github.io/post/linux-vxlan-implement/</loc>
     <lastmod>2019-08-27T10:57:51+08:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   
   <url>
-    <loc>http://qsyqian.github.io/post/use-hugo-deploy-blog/</loc>
+    <loc>https://qsyqian.github.io/post/use-hugo-deploy-blog/</loc>
     <lastmod>2019-08-14T10:50:41+08:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   
   <url>
-    <loc>http://qsyqian.github.io/about/</loc>
+    <loc>https://qsyqian.github.io/about/</loc>
     <lastmod>2019-08-12T18:28:13+08:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   
   <url>
-    <loc>http://qsyqian.github.io/categories/</loc>
+    <loc>https://qsyqian.github.io/categories/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
   
   <url>
-    <loc>http://qsyqian.github.io/tags/</loc>
+    <loc>https://qsyqian.github.io/tags/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>
