@@ -1,185 +1,347 @@
 <!DOCTYPE html>
-<html lang="en-us">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+<html lang="zh-CN" data-theme="light">
+    <head prefix="og: http://ogp.me/ns# article: http://ogp.me/ns/article#">
+    <meta charset="UTF-8" /><meta name="theme-color" content="#fff" />
+        <script>
+            const userPrefers = localStorage.getItem('theme');
+            const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            const lightModeMediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+            if (userPrefers === "dark") {
+                changeModeMeta("dark");
+            } else if (userPrefers === "light") {
+                changeModeMeta("light");
+            } else if (darkModeMediaQuery.matches) {
+                changeModeMeta("dark");
+            } else if (lightModeMediaQuery.matches) {
+                changeModeMeta("light");
+            }
+            function changeModeMeta() {
+                document.documentElement.setAttribute('data-theme', arguments[0]);
+                if (arguments[0] === "dark") {
+                    changeThemeColor("#1c1c21");
+                } else {
+                    changeThemeColor("#fff");
+                }
+            }
+            function changeThemeColor() {
+                document.querySelector('meta[name="theme-color"]').setAttribute('content', arguments[0]);
+            }
+        </script>
+
     
-    <title>qianshuangyang  | Flannel源码分析</title>
-    <meta name="viewport" content="width=device-width,minimum-scale=1">
+
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=2.0, user-scalable=yes" />
+    
+    <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1" />
+    
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+    
+    <meta http-equiv="Cache-Control" content="no-transform" />
+    
+    <meta http-equiv="Cache-Control" content="no-siteapp" />
+    
+    <meta name="renderer" content="webkit" />
+
     <meta name="generator" content="Hugo 0.59.1" />
+
+    <title>Flannel源码分析 | qianshuangyang</title>
+
+    <link rel="stylesheet" href="/css/meme.min.da0bb62c4314b4925eda38b9fd84b0889887d519d686cf53ca5cba5396f34f50.css" integrity="sha256-2gu2LEMUtJJe2ji5/YSwiJiH1RnWhs9Tyly6U5bzT1A=" data-instant-track />
+
+    <link href="https://fonts.googleapis.com/css?family=EB+Garamond:400,400i,500,700,700i|Noto+Serif+SC:400,500,700|Source+Code+Pro:400,400i,700,700i&display=swap&subset=chinese-simplified" rel="stylesheet" />
+
+    <meta name="author" content="qianshuangyang" />
     
     
-      <META NAME="ROBOTS" CONTENT="NOINDEX, NOFOLLOW">
+    <meta name="description" content="Flannel源码分析 前言 flannel作为kubernetes的一种网络解决方案，……" />
+    <meta name="keywords" content="" />
     
+    <link rel="shortcut icon" type="image/ico" href="/favicon.ico" />
+    <link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#2a6df4" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="qianshuangyang" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="qianshuangyang" />
+    <meta name="msapplication-starturl" content="../../" />
+    <meta name="msapplication-TileColor" content="#fff" />
+    <meta name="msapplication-TileImage" content="../../icons/mstile-150x150.png" />
+    <link rel="manifest" href="/manifest.json" />
 
     
     
-      <link href="/dist/css/app.d98f2eb6bcd1eaedb7edf166bd16af26.css" rel="stylesheet">
+
     
+    <link rel="canonical" href="https://qsyqian.github.io/post/flannel-source-code-analysis/" />
+
+
+
+
+<script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "datePublished": "2019-09-12T16:59:05+08:00",
+        "dateModified": "2019-11-24T19:03:04+08:00",
+        "url": "https://qsyqian.github.io/post/flannel-source-code-analysis/",
+        "headline": "Flannel源码分析",
+        "description": "Flannel源码分析 前言 flannel作为kubernetes的一种网络解决方案，……",
+        "keywords": "",
+        "inLanguage" : "zh-CN",
+        "articleSection": "post",
+        "wordCount":  5438 ,
+        "image": "https://qsyqian.github.io/icons/apple-touch-icon.png",
+        "author": {
+            "@type": "Person",
+            "description": "la la la",
+            "email": "qsyqian@gmail.com",
+            "image": "https://qsyqian.github.io/icons/apple-touch-icon.png",
+            "url": "https://qsyqian.github.io/",
+            "name": "qianshuangyang"
+        },
+        "license": "[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh)",
+        "publisher": {
+            "@type": "Organization",
+            "name": "qianshuangyang",
+            "logo": {
+                "@type": "ImageObject",
+                "url": "https://qsyqian.github.io/icons/apple-touch-icon.png"
+            },
+            "url": "https://qsyqian.github.io/"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebSite",
+            "@id": "https://qsyqian.github.io/"
+        }
+    }
+</script>
 
     
 
-    
-      
-    
+
+
+<meta name="twitter:card" content="summary" />
+
+<meta name="twitter:site" content="@reuixiy" />
 
     
-    
-    <meta property="og:title" content="Flannel源码分析" />
-<meta property="og:description" content="Flannel源码分析 前言 flannel作为kubernetes的一种网络解决方案，在社区是比较活跃的。支持多种backend。
-flannel源码地址在：https://github.com/coreos/flannel
-从官网上把flannel的代码clone下来，目录结构如下：
-$ ll -ah total 222K drwxr-xr-x 1 user 197121 0 8月 30 18:37 ./ drwxr-xr-x 1 user 197121 0 8月 30 18:31 ../ -rw-r--r-- 1 user 197121 351 8月 30 18:33 .appveyor.yml -rw-r--r-- 1 user 197121 56 8月 30 18:33 .dockerignore drwxr-xr-x 1 user 197121 0 9月 17 09:34 .git/ drwxr-xr-x 1 user 197121 0 8月 30 18:33 .github/ -rw-r--r-- 1 user 197121 147 8月 30 18:33 ." />
-<meta property="og:type" content="article" />
+
+
+
+
+
+
+<meta property="og:title" content="Flannel源码分析" />
+<meta property="og:description" content="Flannel源码分析 前言 flannel作为kubernetes的一种网络解决方案，……" />
 <meta property="og:url" content="https://qsyqian.github.io/post/flannel-source-code-analysis/" />
-<meta property="article:published_time" content="2019-09-12T16:59:05+08:00" />
-<meta property="article:modified_time" content="2019-09-12T16:59:05+08:00" />
-<meta itemprop="name" content="Flannel源码分析">
-<meta itemprop="description" content="Flannel源码分析 前言 flannel作为kubernetes的一种网络解决方案，在社区是比较活跃的。支持多种backend。
-flannel源码地址在：https://github.com/coreos/flannel
-从官网上把flannel的代码clone下来，目录结构如下：
-$ ll -ah total 222K drwxr-xr-x 1 user 197121 0 8月 30 18:37 ./ drwxr-xr-x 1 user 197121 0 8月 30 18:31 ../ -rw-r--r-- 1 user 197121 351 8月 30 18:33 .appveyor.yml -rw-r--r-- 1 user 197121 56 8月 30 18:33 .dockerignore drwxr-xr-x 1 user 197121 0 9月 17 09:34 .git/ drwxr-xr-x 1 user 197121 0 8月 30 18:33 .github/ -rw-r--r-- 1 user 197121 147 8月 30 18:33 .">
+<meta property="og:site_name" content="qianshuangyang" />
+<meta property="og:locale" content="zh-CN" /><meta property="og:image" content="https://qsyqian.github.io/icons/apple-touch-icon.png" />
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content="2019-09-12T16:59:05+08:00" />
+    <meta property="article:modified_time" content="2019-11-24T19:03:04+08:00" />
+    
+    <meta property="article:section" content="post" />
+    <meta property="article:tag" content="" />
 
-
-<meta itemprop="datePublished" content="2019-09-12T16:59:05&#43;08:00" />
-<meta itemprop="dateModified" content="2019-09-12T16:59:05&#43;08:00" />
-<meta itemprop="wordCount" content="2172">
-
-
-
-<meta itemprop="keywords" content="" />
-<meta name="twitter:card" content="summary"/>
-<meta name="twitter:title" content="Flannel源码分析"/>
-<meta name="twitter:description" content="Flannel源码分析 前言 flannel作为kubernetes的一种网络解决方案，在社区是比较活跃的。支持多种backend。
-flannel源码地址在：https://github.com/coreos/flannel
-从官网上把flannel的代码clone下来，目录结构如下：
-$ ll -ah total 222K drwxr-xr-x 1 user 197121 0 8月 30 18:37 ./ drwxr-xr-x 1 user 197121 0 8月 30 18:31 ../ -rw-r--r-- 1 user 197121 351 8月 30 18:33 .appveyor.yml -rw-r--r-- 1 user 197121 56 8月 30 18:33 .dockerignore drwxr-xr-x 1 user 197121 0 9月 17 09:34 .git/ drwxr-xr-x 1 user 197121 0 8月 30 18:33 .github/ -rw-r--r-- 1 user 197121 147 8月 30 18:33 ."/>
-
-  </head>
-
-  <body class="ma0 avenir bg-near-white">
 
     
-   
-  
+</head>
 
-  <header>
-    <div class="bg-black">
-      <nav class="pv3 ph3 ph4-ns" role="navigation">
-  <div class="flex-l justify-between items-center center">
-    <a href="https://qsyqian.github.io/" class="f3 fw2 hover-white no-underline white-90 dib">
-      qianshuangyang
-    </a>
-    <div class="flex-l items-center">
-      
-
-      
-        <ul class="pl0 mr3">
-          
-          <li class="list f5 f4-ns fw4 dib pr3">
-            <a class="hover-white no-underline white-90" href="/post/" title="Posts page">
-              Posts
-            </a>
-          </li>
-          
-        </ul>
-      
-      
-
-
-
-
-
-
-
-
-
-
-
-
-    </div>
-  </div>
-</nav>
-
-    </div>
-  </header>
-
-
-
-    <main class="pb7" role="main">
-      
-  
-  <article class="flex-l flex-wrap justify-between mw8 center ph3">
-
-    <header class="mt4 w-100">
-      <p class="f6 b helvetica tracked">
-          
-        POSTS
-      </p>
-      <h1 class="f1 athelas mb1">Flannel源码分析</h1>
-      
-      
-      <time class="f6 mv4 dib tracked" datetime="2019-09-12T16:59:05&#43;08:00">September 12, 2019</time>
-      
-      
+    <body>
+        <div class="container">
+            
+    <header class="header">
+        <div class="site-brand">
+            
+            <a href="/"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 66.146 26.458" class="brand"><path d="M58.216 17.03v-2.505c1.084 0 3.793.067 5.351.225l.068-.067c-.045-.204-.068-.655-.068-.858 0-.204.023-.633.068-.836l-.068-.067c-1.332.112-2.687.225-5.35.225V11.5c0-.384.022-2.438.18-2.98 3.025 0 6.457.27 6.457.27l.045-.09c-.022-.18-.045-.722-.045-.925 0-.18 0-.474.045-.79l-.045-.068c-.361.045-.88.068-1.355.068h-6.863c-.768 0-1.897-.068-1.897-.068l-.045.068c.18 1.287.271 2.822.271 4.515v5.532c0 1.693-.09 3.296-.27 4.515l.022.068s1.129-.068 1.919-.068h7.09c.473 0 .993.023 1.354.068l.045-.068c-.045-.293-.045-.587-.045-.813 0-.225.022-1.06.045-1.241l-.045-.09s-3.658.496-6.683.496c-.158-.542-.18-2.483-.18-2.867zm-20.694-3.363l-.113-.068c0-.497-.022-1.445-.045-1.648-.045-.136-.068-.226-.203-.226-.655.113-2.123.113-2.913.068l-.045.067c.158.971.248 2.71.248 4.38v1.242c0 1.694-.09 2.845-.27 4.064l.022.068s.948-.068 1.739-.068c.767 0 1.67.068 1.67.068l.045-.068c-.18-1.287-.225-2.348-.225-4.064v-2.28c.948-1.152 1.76-1.829 2.393-1.829.858 0 1.332.316 1.332 1.829v2.28c0 1.694-.09 2.845-.27 4.064l.022.068s1.016-.068 1.806-.068c.767 0 1.648.068 1.648.068l.045-.068c-.18-1.287-.27-2.348-.27-4.064v-1.987c0-.316 0-.406-.023-.677 1.083-1.197 1.58-1.445 2.46-1.445.723 0 1.242.497 1.242 2.01v2.1c0 1.693-.09 2.844-.27 4.063l.022.068s1.016-.068 1.806-.068c.768 0 1.648.068 1.648.068l.046-.068c-.181-1.287-.271-2.348-.271-4.064v-2.258c0-2.257-.79-3.59-3.229-3.59-1.129 0-2.303.452-3.59 1.807-.451-1.129-1.084-1.806-3.093-1.806-1.106 0-2.506.925-3.364 2.032zm-12.436 2.122c.068-1.106.339-1.874.677-2.348a1.645 1.645 0 0 1 1.377-.677c.904 0 1.468 1.06 1.468 3.025zm6.209 3.341c-1.061.858-2.145.926-3.093.926-1.107 0-1.92-.293-2.461-.88-.497-.542-.745-1.332-.745-2.371h2.235c2.258 0 4.2.045 4.2.045l.135-.135c0-2.823-.79-5.08-4.268-5.08-1.241 0-2.596.406-3.5 1.129-1.083.903-1.828 2.28-1.828 4.131 0 1.332.474 2.755 1.423 3.703.767.813 2.1 1.174 3.793 1.174 1.625 0 3.228-.52 4.47-1.942 0-.293-.135-.7-.361-.7zM4 6.803c-.835 4.832-2.032 10.499-2.98 14.811.248-.068.767-.068 1.038-.068.249 0 1.016 0 1.265.068.067-2.37.632-7.157 1.241-10.68l.068.023a153.476 153.476 0 0 1 4.29 10.59h1.445c1.648-3.749 3.454-7.135 5.373-10.612h.068c.43 3.567.723 6.931 1.039 10.679.338-.068 1.422-.068 1.76-.068.34 0 1.31 0 1.649.068-.7-4.9-1.197-9.257-1.784-14.811h-2.009L10.82 17.302h-.09c-1.784-3.568-3.094-6.864-4.426-10.499z"/></svg></a>
+            
+        </div>
     </header>
 
-    <section class="nested-copy-line-height lh-copy serif f4 nested-links nested-img mid-gray pr4-l w-two-thirds-l">
+            
+    <nav class="nav">
+        <ul class="menu" id="menu">
+            
+                
+            
+            
+            
+                <li class="menu-item"><a href="/"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" class="icon menu-item-icon"><path d="M280.37 148.26L96 300.11V464a16 16 0 0 0 16 16l112.06-.29a16 16 0 0 0 15.92-16V368a16 16 0 0 1 16-16h64a16 16 0 0 1 16 16v95.64a16 16 0 0 0 16 16.05L464 480a16 16 0 0 0 16-16V300L295.67 148.26a12.19 12.19 0 0 0-15.3 0zM571.6 251.47L488 182.56V44.05a12 12 0 0 0-12-12h-56a12 12 0 0 0-12 12v72.61L318.47 43a48 48 0 0 0-61 0L4.34 251.47a12 12 0 0 0-1.6 16.9l25.5 31A12 12 0 0 0 45.15 301l235.22-193.74a12.19 12.19 0 0 1 15.3 0L530.9 301a12 12 0 0 0 16.9-1.6l25.5-31a12 12 0 0 0-1.7-16.93z"/></svg><span class="menu-item-name">首页</span></a>
+                </li>
+            
+                <li class="menu-item"><a href="/posts/"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="icon menu-item-icon"><path d="M32 448c0 17.7 14.3 32 32 32h384c17.7 0 32-14.3 32-32V160H32v288zm160-212c0-6.6 5.4-12 12-12h104c6.6 0 12 5.4 12 12v8c0 6.6-5.4 12-12 12H204c-6.6 0-12-5.4-12-12v-8zM480 32H32C14.3 32 0 46.3 0 64v48c0 8.8 7.2 16 16 16h480c8.8 0 16-7.2 16-16V64c0-17.7-14.3-32-32-32z"/></svg><span class="menu-item-name">文章</span></a>
+                </li>
+            
+                <li class="menu-item"><a href="/categories/"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="icon menu-item-icon"><path d="M149.333 56v80c0 13.255-10.745 24-24 24H24c-13.255 0-24-10.745-24-24V56c0-13.255 10.745-24 24-24h101.333c13.255 0 24 10.745 24 24zm181.334 240v-80c0-13.255-10.745-24-24-24H205.333c-13.255 0-24 10.745-24 24v80c0 13.255 10.745 24 24 24h101.333c13.256 0 24.001-10.745 24.001-24zm32-240v80c0 13.255 10.745 24 24 24H488c13.255 0 24-10.745 24-24V56c0-13.255-10.745-24-24-24H386.667c-13.255 0-24 10.745-24 24zm-32 80V56c0-13.255-10.745-24-24-24H205.333c-13.255 0-24 10.745-24 24v80c0 13.255 10.745 24 24 24h101.333c13.256 0 24.001-10.745 24.001-24zm-205.334 56H24c-13.255 0-24 10.745-24 24v80c0 13.255 10.745 24 24 24h101.333c13.255 0 24-10.745 24-24v-80c0-13.255-10.745-24-24-24zM0 376v80c0 13.255 10.745 24 24 24h101.333c13.255 0 24-10.745 24-24v-80c0-13.255-10.745-24-24-24H24c-13.255 0-24 10.745-24 24zm386.667-56H488c13.255 0 24-10.745 24-24v-80c0-13.255-10.745-24-24-24H386.667c-13.255 0-24 10.745-24 24v80c0 13.255 10.745 24 24 24zm0 160H488c13.255 0 24-10.745 24-24v-80c0-13.255-10.745-24-24-24H386.667c-13.255 0-24 10.745-24 24v80c0 13.255 10.745 24 24 24zM181.333 376v80c0 13.255 10.745 24 24 24h101.333c13.255 0 24-10.745 24-24v-80c0-13.255-10.745-24-24-24H205.333c-13.255 0-24 10.745-24 24z"/></svg><span class="menu-item-name">分类</span></a>
+                </li>
+            
+                <li class="menu-item"><a href="/tags/"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512" class="icon menu-item-icon"><path d="M497.941 225.941L286.059 14.059A48 48 0 0 0 252.118 0H48C21.49 0 0 21.49 0 48v204.118a48 48 0 0 0 14.059 33.941l211.882 211.882c18.744 18.745 49.136 18.746 67.882 0l204.118-204.118c18.745-18.745 18.745-49.137 0-67.882zM112 160c-26.51 0-48-21.49-48-48s21.49-48 48-48 48 21.49 48 48-21.49 48-48 48zm513.941 133.823L421.823 497.941c-18.745 18.745-49.137 18.745-67.882 0l-.36-.36L527.64 323.522c16.999-16.999 26.36-39.6 26.36-63.64s-9.362-46.641-26.36-63.64L331.397 0h48.721a48 48 0 0 1 33.941 14.059l211.882 211.882c18.745 18.745 18.745 49.137 0 67.882z"/></svg><span class="menu-item-name">标签</span></a>
+                </li>
+            
+                <li class="menu-item"><a href="/about/"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512" class="icon menu-item-icon"><path d="M248 8C111 8 0 119 0 256s111 248 248 248 248-111 248-248S385 8 248 8zm0 96c48.6 0 88 39.4 88 88s-39.4 88-88 88-88-39.4-88-88 39.4-88 88-88zm0 344c-58.7 0-111.3-26.6-146.5-68.2 18.8-35.4 55.6-59.8 98.5-59.8 2.4 0 4.8.4 7.1 1.1 13 4.2 26.6 6.9 40.9 6.9 14.3 0 28-2.7 40.9-6.9 2.3-.7 4.7-1.1 7.1-1.1 42.9 0 79.7 24.4 98.5 59.8C359.3 421.4 306.7 448 248 448z"/></svg><span class="menu-item-name">关于</span></a>
+                </li>
+            
+        </ul>
+    </nav>
 
-<h1 id="flannel源码分析">Flannel源码分析</h1>
+            
+            
+    
+        
+            
+        
+        <div id="theme-toggle" onclick="modeSwitcher()">🌞</div>
+    
 
-<h2 id="前言">前言</h2>
+            
+    <main class="main single" id="main">
+    <div class="main-inner">
+
+        <article class="content post" data-align="justify" data-type="post">
+
+            <h1 class="post-title">Flannel源码分析</h1>
+
+            
+
+            
+                
+            
+
+            
+                
+
+<div class="post-meta">
+    
+        
+        <time datetime="2019-09-12T16:59:05+08:00" class="post-meta-item published"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" class="icon post-meta-icon"><path d="M148 288h-40c-6.6 0-12-5.4-12-12v-40c0-6.6 5.4-12 12-12h40c6.6 0 12 5.4 12 12v40c0 6.6-5.4 12-12 12zm108-12v-40c0-6.6-5.4-12-12-12h-40c-6.6 0-12 5.4-12 12v40c0 6.6 5.4 12 12 12h40c6.6 0 12-5.4 12-12zm96 0v-40c0-6.6-5.4-12-12-12h-40c-6.6 0-12 5.4-12 12v40c0 6.6 5.4 12 12 12h40c6.6 0 12-5.4 12-12zm-96 96v-40c0-6.6-5.4-12-12-12h-40c-6.6 0-12 5.4-12 12v40c0 6.6 5.4 12 12 12h40c6.6 0 12-5.4 12-12zm-96 0v-40c0-6.6-5.4-12-12-12h-40c-6.6 0-12 5.4-12 12v40c0 6.6 5.4 12 12 12h40c6.6 0 12-5.4 12-12zm192 0v-40c0-6.6-5.4-12-12-12h-40c-6.6 0-12 5.4-12 12v40c0 6.6 5.4 12 12 12h40c6.6 0 12-5.4 12-12zm96-260v352c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V112c0-26.5 21.5-48 48-48h48V12c0-6.6 5.4-12 12-12h40c6.6 0 12 5.4 12 12v52h128V12c0-6.6 5.4-12 12-12h40c6.6 0 12 5.4 12 12v52h48c26.5 0 48 21.5 48 48zm-48 346V160H48v298c0 3.3 2.7 6 6 6h340c3.3 0 6-2.7 6-6z"/></svg>&nbsp;2019.9.12</time>
+    
+    
+        
+        <time datetime="2019-11-24T19:03:04+08:00" class="post-meta-item modified"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" class="icon post-meta-icon"><path d="M400 64h-48V12c0-6.627-5.373-12-12-12h-40c-6.627 0-12 5.373-12 12v52H160V12c0-6.627-5.373-12-12-12h-40c-6.627 0-12 5.373-12 12v52H48C21.49 64 0 85.49 0 112v352c0 26.51 21.49 48 48 48h352c26.51 0 48-21.49 48-48V112c0-26.51-21.49-48-48-48zm-6 400H54a6 6 0 0 1-6-6V160h352v298a6 6 0 0 1-6 6zm-52.849-200.65L198.842 404.519c-4.705 4.667-12.303 4.637-16.971-.068l-75.091-75.699c-4.667-4.705-4.637-12.303.068-16.971l22.719-22.536c4.705-4.667 12.303-4.637 16.97.069l44.104 44.461 111.072-110.181c4.705-4.667 12.303-4.637 16.971.068l22.536 22.718c4.667 4.705 4.636 12.303-.069 16.97z"/></svg>&nbsp;2019.11.24</time>
+    
+    
+    
+        
+        
+        
+            
+        
+    
+    
+        
+        <span class="post-meta-item wordcount"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="icon post-meta-icon"><path d="M497.9 142.1l-46.1 46.1c-4.7 4.7-12.3 4.7-17 0l-111-111c-4.7-4.7-4.7-12.3 0-17l46.1-46.1c18.7-18.7 49.1-18.7 67.9 0l60.1 60.1c18.8 18.7 18.8 49.1 0 67.9zM284.2 99.8L21.6 362.4.4 483.9c-2.9 16.4 11.4 30.6 27.8 27.8l121.5-21.3 262.6-262.6c4.7-4.7 4.7-12.3 0-17l-111-111c-4.8-4.7-12.4-4.7-17.1 0zM124.1 339.9c-5.5-5.5-5.5-14.3 0-19.8l154-154c5.5-5.5 14.3-5.5 19.8 0s5.5 14.3 0 19.8l-154 154c-5.5 5.5-14.3 5.5-19.8 0zM88 424h48v36.3l-64.5 11.3-31.1-31.1L51.7 376H88v48z"/></svg>&nbsp;5438</span>
+    
+    
+        
+        <span class="post-meta-item reading-time"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="icon post-meta-icon"><path d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm0 448c-110.5 0-200-89.5-200-200S145.5 56 256 56s200 89.5 200 200-89.5 200-200 200zm61.8-104.4l-84.9-61.7c-3.1-2.3-4.9-5.9-4.9-9.7V116c0-6.6 5.4-12 12-12h32c6.6 0 12 5.4 12 12v141.7l66.8 48.6c5.4 3.9 6.5 11.4 2.6 16.8L334.6 349c-3.9 5.3-11.4 6.5-16.8 2.6z"/></svg>&nbsp;11&nbsp;分钟</span>
+    
+    
+</div>
+            
+
+            <div class="post-body">
+
+<h1 id="flannel源码分析"><a href="#flannel源码分析" class="anchor-link"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="icon anchor-icon"><path d="M326.612 185.391c59.747 59.809 58.927 155.698.36 214.59-.11.12-.24.25-.36.37l-67.2 67.2c-59.27 59.27-155.699 59.262-214.96 0-59.27-59.26-59.27-155.7 0-214.96l37.106-37.106c9.84-9.84 26.786-3.3 27.294 10.606.648 17.722 3.826 35.527 9.69 52.721 1.986 5.822.567 12.262-3.783 16.612l-13.087 13.087c-28.026 28.026-28.905 73.66-1.155 101.96 28.024 28.579 74.086 28.749 102.325.51l67.2-67.19c28.191-28.191 28.073-73.757 0-101.83-3.701-3.694-7.429-6.564-10.341-8.569a16.037 16.037 0 0 1-6.947-12.606c-.396-10.567 3.348-21.456 11.698-29.806l21.054-21.055c5.521-5.521 14.182-6.199 20.584-1.731a152.482 152.482 0 0 1 20.522 17.197zM467.547 44.449c-59.261-59.262-155.69-59.27-214.96 0l-67.2 67.2c-.12.12-.25.25-.36.37-58.566 58.892-59.387 154.781.36 214.59a152.454 152.454 0 0 0 20.521 17.196c6.402 4.468 15.064 3.789 20.584-1.731l21.054-21.055c8.35-8.35 12.094-19.239 11.698-29.806a16.037 16.037 0 0 0-6.947-12.606c-2.912-2.005-6.64-4.875-10.341-8.569-28.073-28.073-28.191-73.639 0-101.83l67.2-67.19c28.239-28.239 74.3-28.069 102.325.51 27.75 28.3 26.872 73.934-1.155 101.96l-13.087 13.087c-4.35 4.35-5.769 10.79-3.783 16.612 5.864 17.194 9.042 34.999 9.69 52.721.509 13.906 17.454 20.446 27.294 10.606l37.106-37.106c59.271-59.259 59.271-155.699.001-214.959z"/></svg></a>Flannel源码分析</h1>
+
+<h2 id="前言"><a href="#前言" class="anchor-link"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="icon anchor-icon"><path d="M326.612 185.391c59.747 59.809 58.927 155.698.36 214.59-.11.12-.24.25-.36.37l-67.2 67.2c-59.27 59.27-155.699 59.262-214.96 0-59.27-59.26-59.27-155.7 0-214.96l37.106-37.106c9.84-9.84 26.786-3.3 27.294 10.606.648 17.722 3.826 35.527 9.69 52.721 1.986 5.822.567 12.262-3.783 16.612l-13.087 13.087c-28.026 28.026-28.905 73.66-1.155 101.96 28.024 28.579 74.086 28.749 102.325.51l67.2-67.19c28.191-28.191 28.073-73.757 0-101.83-3.701-3.694-7.429-6.564-10.341-8.569a16.037 16.037 0 0 1-6.947-12.606c-.396-10.567 3.348-21.456 11.698-29.806l21.054-21.055c5.521-5.521 14.182-6.199 20.584-1.731a152.482 152.482 0 0 1 20.522 17.197zM467.547 44.449c-59.261-59.262-155.69-59.27-214.96 0l-67.2 67.2c-.12.12-.25.25-.36.37-58.566 58.892-59.387 154.781.36 214.59a152.454 152.454 0 0 0 20.521 17.196c6.402 4.468 15.064 3.789 20.584-1.731l21.054-21.055c8.35-8.35 12.094-19.239 11.698-29.806a16.037 16.037 0 0 0-6.947-12.606c-2.912-2.005-6.64-4.875-10.341-8.569-28.073-28.073-28.191-73.639 0-101.83l67.2-67.19c28.239-28.239 74.3-28.069 102.325.51 27.75 28.3 26.872 73.934-1.155 101.96l-13.087 13.087c-4.35 4.35-5.769 10.79-3.783 16.612 5.864 17.194 9.042 34.999 9.69 52.721.509 13.906 17.454 20.446 27.294 10.606l37.106-37.106c59.271-59.259 59.271-155.699.001-214.959z"/></svg></a>前言</h2>
 
 <p>flannel作为kubernetes的一种网络解决方案，在社区是比较活跃的。支持多种backend。</p>
 
-<p>flannel源码地址在：<a href="https://github.com/coreos/flannel">https://github.com/coreos/flannel</a></p>
+<p>flannel源码地址在：<a href="https://github.com/coreos/flannel" target="_blank">https://github.com/coreos/flannel</a></p>
 
 <p>从官网上把flannel的代码clone下来，目录结构如下：</p>
-
-<pre><code class="language-shell">$ ll -ah
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ ll -ah
 total 222K
-drwxr-xr-x 1 user 197121    0 8月  30 18:37 ./
-drwxr-xr-x 1 user 197121    0 8月  30 18:31 ../
--rw-r--r-- 1 user 197121  351 8月  30 18:33 .appveyor.yml
--rw-r--r-- 1 user 197121   56 8月  30 18:33 .dockerignore
-drwxr-xr-x 1 user 197121    0 9月  17 09:34 .git/
-drwxr-xr-x 1 user 197121    0 8月  30 18:33 .github/
--rw-r--r-- 1 user 197121  147 8月  30 18:33 .gitignore
-drwxr-xr-x 1 user 197121    0 9月  17 11:22 .idea/
--rw-r--r-- 1 user 197121  411 8月  30 18:33 .travis.yml
-drwxr-xr-x 1 user 197121    0 8月  30 18:33 backend/
--rw-r--r-- 1 user 197121 3.7K 8月  30 18:33 bill-of-materials.json
--rw-r--r-- 1 user 197121   98 8月  30 18:33 bill-of-materials.override.json
--rw-r--r-- 1 user 197121 3.1K 8月  30 18:33 code-of-conduct.md
--rw-r--r-- 1 user 197121 2.5K 8月  30 18:33 CONTRIBUTING.md
--rw-r--r-- 1 user 197121 1.5K 8月  30 18:33 DCO
-drwxr-xr-x 1 user 197121    0 8月  30 18:33 dist/
--rw-r--r-- 1 user 197121  427 8月  30 18:33 Dockerfile.amd64
--rw-r--r-- 1 user 197121  504 8月  30 18:33 Dockerfile.arm
--rw-r--r-- 1 user 197121  494 8月  30 18:33 Dockerfile.arm64
--rw-r--r-- 1 user 197121  508 8月  30 18:33 Dockerfile.ppc64le
--rw-r--r-- 1 user 197121  504 8月  30 18:33 Dockerfile.s390x
-drwxr-xr-x 1 user 197121    0 8月  30 18:33 Documentation/
--rw-r--r-- 1 user 197121  11K 8月  30 18:33 glide.lock
--rw-r--r-- 1 user 197121 1.6K 8月  30 18:33 glide.yaml
--rwxr-xr-x 1 user 197121  298 8月  30 18:33 header-check.sh*
-drwxr-xr-x 1 user 197121    0 8月  30 18:33 images/
--rw-r--r-- 1 user 197121  12K 8月  30 18:33 LICENSE
-drwxr-xr-x 1 user 197121    0 8月  30 18:33 logos/
--rw-r--r-- 1 user 197121  21K 8月  30 18:33 main.go
--rw-r--r-- 1 user 197121   98 8月  30 18:33 MAINTAINERS
--rw-r--r-- 1 user 197121  12K 8月  30 18:33 Makefile
-drwxr-xr-x 1 user 197121    0 8月  30 18:33 network/
--rw-r--r-- 1 user 197121  131 8月  30 18:33 NOTICE
--rw-r--r-- 1 user 197121  212 8月  30 18:33 OWNERS
--rw-r--r-- 1 user 197121  75K 8月  30 18:33 packet-01.png
-drwxr-xr-x 1 user 197121    0 8月  30 18:33 pkg/
--rw-r--r-- 1 user 197121 4.3K 8月  30 18:33 README.md
-drwxr-xr-x 1 user 197121    0 8月  30 18:33 subnet/
-drwxr-xr-x 1 user 197121    0 8月  30 18:33 vendor/
-drwxr-xr-x 1 user 197121    0 8月  30 18:33 version/
-</code></pre>
-
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:37 ./
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:31 ../
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">351</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 .appveyor.yml
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>   <span class="m">56</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 .dockerignore
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 9月  <span class="m">17</span> <span class="m">09</span>:34 .git/
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 .github/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">147</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 .gitignore
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 9月  <span class="m">17</span> <span class="m">11</span>:22 .idea/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">411</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 .travis.yml
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 backend/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span> <span class="m">3</span>.7K 8月  <span class="m">30</span> <span class="m">18</span>:33 bill-of-materials.json
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>   <span class="m">98</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 bill-of-materials.override.json
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span> <span class="m">3</span>.1K 8月  <span class="m">30</span> <span class="m">18</span>:33 code-of-conduct.md
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span> <span class="m">2</span>.5K 8月  <span class="m">30</span> <span class="m">18</span>:33 CONTRIBUTING.md
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span> <span class="m">1</span>.5K 8月  <span class="m">30</span> <span class="m">18</span>:33 DCO
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 dist/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">427</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 Dockerfile.amd64
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">504</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 Dockerfile.arm
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">494</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 Dockerfile.arm64
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">508</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 Dockerfile.ppc64le
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">504</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 Dockerfile.s390x
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 Documentation/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  11K 8月  <span class="m">30</span> <span class="m">18</span>:33 glide.lock
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span> <span class="m">1</span>.6K 8月  <span class="m">30</span> <span class="m">18</span>:33 glide.yaml
+-rwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>  <span class="m">298</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 header-check.sh*
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 images/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  12K 8月  <span class="m">30</span> <span class="m">18</span>:33 LICENSE
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 logos/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  21K 8月  <span class="m">30</span> <span class="m">18</span>:33 main.go
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>   <span class="m">98</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 MAINTAINERS
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  12K 8月  <span class="m">30</span> <span class="m">18</span>:33 Makefile
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 network/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">131</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 NOTICE
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">212</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 OWNERS
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  75K 8月  <span class="m">30</span> <span class="m">18</span>:33 packet-01.png
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 pkg/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span> <span class="m">4</span>.3K 8月  <span class="m">30</span> <span class="m">18</span>:33 README.md
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 subnet/
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 vendor/
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 version/</code></pre></td></tr></table>
+</div>
+</div>
 <p>这里介绍几个主要目录的用途：</p>
 
 <ul>
@@ -193,419 +355,814 @@ drwxr-xr-x 1 user 197121    0 8月  30 18:33 version/
 
 <p>经过上述分析，分析flannel的源代码就从./main.go文件入手。</p>
 
-<h2 id="1-参数解析">1.参数解析</h2>
+<h2 id="1-参数解析"><a href="#1-参数解析" class="anchor-link"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="icon anchor-icon"><path d="M326.612 185.391c59.747 59.809 58.927 155.698.36 214.59-.11.12-.24.25-.36.37l-67.2 67.2c-59.27 59.27-155.699 59.262-214.96 0-59.27-59.26-59.27-155.7 0-214.96l37.106-37.106c9.84-9.84 26.786-3.3 27.294 10.606.648 17.722 3.826 35.527 9.69 52.721 1.986 5.822.567 12.262-3.783 16.612l-13.087 13.087c-28.026 28.026-28.905 73.66-1.155 101.96 28.024 28.579 74.086 28.749 102.325.51l67.2-67.19c28.191-28.191 28.073-73.757 0-101.83-3.701-3.694-7.429-6.564-10.341-8.569a16.037 16.037 0 0 1-6.947-12.606c-.396-10.567 3.348-21.456 11.698-29.806l21.054-21.055c5.521-5.521 14.182-6.199 20.584-1.731a152.482 152.482 0 0 1 20.522 17.197zM467.547 44.449c-59.261-59.262-155.69-59.27-214.96 0l-67.2 67.2c-.12.12-.25.25-.36.37-58.566 58.892-59.387 154.781.36 214.59a152.454 152.454 0 0 0 20.521 17.196c6.402 4.468 15.064 3.789 20.584-1.731l21.054-21.055c8.35-8.35 12.094-19.239 11.698-29.806a16.037 16.037 0 0 0-6.947-12.606c-2.912-2.005-6.64-4.875-10.341-8.569-28.073-28.073-28.191-73.639 0-101.83l67.2-67.19c28.239-28.239 74.3-28.069 102.325.51 27.75 28.3 26.872 73.934-1.155 101.96l-13.087 13.087c-4.35 4.35-5.769 10.79-3.783 16.612 5.864 17.194 9.042 34.999 9.69 52.721.509 13.906 17.454 20.446 27.294 10.606l37.106-37.106c59.271-59.259 59.271-155.699.001-214.959z"/></svg></a>1.参数解析</h2>
 
 <p>./main.go中结构体CmdLineOpts包含了所有命令行传入的参数解析，具体如下：</p>
-
-<pre><code class="language-go">type CmdLineOpts struct {
-	etcdEndpoints          string
-	etcdPrefix             string
-	etcdKeyfile            string
-	etcdCertfile           string
-	etcdCAFile             string
-	etcdUsername           string
-	etcdPassword           string
-    // 上述的etcd参数，指的是如果采用etcd作为后端subnet存储的话，要提供上述etcd连接参数
-	help                   bool
-	version                bool
-    // 帮助和打印出version
-	kubeSubnetMgr          bool
-    // 如果上述kubeSubnetMgr为true，则使用kube-apiserver为subnet的后端存储（其实是将每个node的subnet信息存入到了node的annotations中）
-	kubeApiUrl             string
-	kubeAnnotationPrefix   string
-	kubeConfigFile         string
-    // 上述三个kube相关的参数标识连接kube-apiserver的必要参数
-	iface                  flagSlice
-	ifaceRegex             flagSlice
-    // iface参数，用来作为多节点通信的网卡，不指定的话，flannel会使用默认网卡和其上IP信息
-	ipMasq                 bool
-    // ipMasq （具体意义待定）
-	subnetFile             string
-    // 存储subnet的文件，默认为/run/flannel/subnet.env，其中存储了整个集群的pod subnet段，本机上pod的subnet段等信息
-	subnetDir              string
-	publicIP               string
-    // 用来跨节点通信的IP地址，和上述iface参数类似
-	subnetLeaseRenewMargin int
-    // subnet是以lease（租约）的形式存储起来的，到期会自动过期。需要定时续租，改时间表示在lease过期前多少时间续租，单位是min，默认值是60
-	healthzIP              string
-	healthzPort            int
-    // 用来健康检查的IP和PORT
-	charonExecutablePath   string
-	charonViciUri          string
-	iptablesResyncSeconds  int
-    // 同步iptables规则的时间间隔。默认5s同步一次
-	iptablesForwardRules   bool
-    // add default accept rules to FORWARD chain in iptables
-	netConfPath            string
-    // networkConfiguration PATH
-}
-</code></pre>
-
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">type</span> <span class="nx">CmdLineOpts</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="nx">etcdEndpoints</span>          <span class="kt">string</span>
+	<span class="nx">etcdPrefix</span>             <span class="kt">string</span>
+	<span class="nx">etcdKeyfile</span>            <span class="kt">string</span>
+	<span class="nx">etcdCertfile</span>           <span class="kt">string</span>
+	<span class="nx">etcdCAFile</span>             <span class="kt">string</span>
+	<span class="nx">etcdUsername</span>           <span class="kt">string</span>
+	<span class="nx">etcdPassword</span>           <span class="kt">string</span>
+    <span class="c1">// 上述的etcd参数，指的是如果采用etcd作为后端subnet存储的话，要提供上述etcd连接参数
+</span><span class="c1"></span>	<span class="nx">help</span>                   <span class="kt">bool</span>
+	<span class="nx">version</span>                <span class="kt">bool</span>
+    <span class="c1">// 帮助和打印出version
+</span><span class="c1"></span>	<span class="nx">kubeSubnetMgr</span>          <span class="kt">bool</span>
+    <span class="c1">// 如果上述kubeSubnetMgr为true，则使用kube-apiserver为subnet的后端存储（其实是将每个node的subnet信息存入到了node的annotations中）
+</span><span class="c1"></span>	<span class="nx">kubeApiUrl</span>             <span class="kt">string</span>
+	<span class="nx">kubeAnnotationPrefix</span>   <span class="kt">string</span>
+	<span class="nx">kubeConfigFile</span>         <span class="kt">string</span>
+    <span class="c1">// 上述三个kube相关的参数标识连接kube-apiserver的必要参数
+</span><span class="c1"></span>	<span class="nx">iface</span>                  <span class="nx">flagSlice</span>
+	<span class="nx">ifaceRegex</span>             <span class="nx">flagSlice</span>
+    <span class="c1">// iface参数，用来作为多节点通信的网卡，不指定的话，flannel会使用默认网卡和其上IP信息
+</span><span class="c1"></span>	<span class="nx">ipMasq</span>                 <span class="kt">bool</span>
+    <span class="c1">// ipMasq （具体意义待定）
+</span><span class="c1"></span>	<span class="nx">subnetFile</span>             <span class="kt">string</span>
+    <span class="c1">// 存储subnet的文件，默认为/run/flannel/subnet.env，其中存储了整个集群的pod subnet段，本机上pod的subnet段等信息
+</span><span class="c1"></span>	<span class="nx">subnetDir</span>              <span class="kt">string</span>
+	<span class="nx">publicIP</span>               <span class="kt">string</span>
+    <span class="c1">// 用来跨节点通信的IP地址，和上述iface参数类似
+</span><span class="c1"></span>	<span class="nx">subnetLeaseRenewMargin</span> <span class="kt">int</span>
+    <span class="c1">// subnet是以lease（租约）的形式存储起来的，到期会自动过期。需要定时续租，改时间表示在lease过期前多少时间续租，单位是min，默认值是60
+</span><span class="c1"></span>	<span class="nx">healthzIP</span>              <span class="kt">string</span>
+	<span class="nx">healthzPort</span>            <span class="kt">int</span>
+    <span class="c1">// 用来健康检查的IP和PORT
+</span><span class="c1"></span>	<span class="nx">charonExecutablePath</span>   <span class="kt">string</span>
+	<span class="nx">charonViciUri</span>          <span class="kt">string</span>
+	<span class="nx">iptablesResyncSeconds</span>  <span class="kt">int</span>
+    <span class="c1">// 同步iptables规则的时间间隔。默认5s同步一次
+</span><span class="c1"></span>	<span class="nx">iptablesForwardRules</span>   <span class="kt">bool</span>
+    <span class="c1">// add default accept rules to FORWARD chain in iptables
+</span><span class="c1"></span>	<span class="nx">netConfPath</span>            <span class="kt">string</span>
+    <span class="c1">// networkConfiguration PATH
+</span><span class="c1"></span><span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
 <p>main.go中首先是init函数对命令行传入参数进行赋值，没有赋值的采用默认值。然后进到main()函数中。</p>
 
-<h2 id="2-main函数结构">2.main函数结构</h2>
+<h2 id="2-main函数结构"><a href="#2-main函数结构" class="anchor-link"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="icon anchor-icon"><path d="M326.612 185.391c59.747 59.809 58.927 155.698.36 214.59-.11.12-.24.25-.36.37l-67.2 67.2c-59.27 59.27-155.699 59.262-214.96 0-59.27-59.26-59.27-155.7 0-214.96l37.106-37.106c9.84-9.84 26.786-3.3 27.294 10.606.648 17.722 3.826 35.527 9.69 52.721 1.986 5.822.567 12.262-3.783 16.612l-13.087 13.087c-28.026 28.026-28.905 73.66-1.155 101.96 28.024 28.579 74.086 28.749 102.325.51l67.2-67.19c28.191-28.191 28.073-73.757 0-101.83-3.701-3.694-7.429-6.564-10.341-8.569a16.037 16.037 0 0 1-6.947-12.606c-.396-10.567 3.348-21.456 11.698-29.806l21.054-21.055c5.521-5.521 14.182-6.199 20.584-1.731a152.482 152.482 0 0 1 20.522 17.197zM467.547 44.449c-59.261-59.262-155.69-59.27-214.96 0l-67.2 67.2c-.12.12-.25.25-.36.37-58.566 58.892-59.387 154.781.36 214.59a152.454 152.454 0 0 0 20.521 17.196c6.402 4.468 15.064 3.789 20.584-1.731l21.054-21.055c8.35-8.35 12.094-19.239 11.698-29.806a16.037 16.037 0 0 0-6.947-12.606c-2.912-2.005-6.64-4.875-10.341-8.569-28.073-28.073-28.191-73.639 0-101.83l67.2-67.19c28.239-28.239 74.3-28.069 102.325.51 27.75 28.3 26.872 73.934-1.155 101.96l-13.087 13.087c-4.35 4.35-5.769 10.79-3.783 16.612 5.864 17.194 9.042 34.999 9.69 52.721.509 13.906 17.454 20.446 27.294 10.606l37.106-37.106c59.271-59.259 59.271-155.699.001-214.959z"/></svg></a>2.main函数结构</h2>
 
 <p>首先看一下main函数的主要结构，然后分步分析：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt">  1
+</span><span class="lnt">  2
+</span><span class="lnt">  3
+</span><span class="lnt">  4
+</span><span class="lnt">  5
+</span><span class="lnt">  6
+</span><span class="lnt">  7
+</span><span class="lnt">  8
+</span><span class="lnt">  9
+</span><span class="lnt"> 10
+</span><span class="lnt"> 11
+</span><span class="lnt"> 12
+</span><span class="lnt"> 13
+</span><span class="lnt"> 14
+</span><span class="lnt"> 15
+</span><span class="lnt"> 16
+</span><span class="lnt"> 17
+</span><span class="lnt"> 18
+</span><span class="lnt"> 19
+</span><span class="lnt"> 20
+</span><span class="lnt"> 21
+</span><span class="lnt"> 22
+</span><span class="lnt"> 23
+</span><span class="lnt"> 24
+</span><span class="lnt"> 25
+</span><span class="lnt"> 26
+</span><span class="lnt"> 27
+</span><span class="lnt"> 28
+</span><span class="lnt"> 29
+</span><span class="lnt"> 30
+</span><span class="lnt"> 31
+</span><span class="lnt"> 32
+</span><span class="lnt"> 33
+</span><span class="lnt"> 34
+</span><span class="lnt"> 35
+</span><span class="lnt"> 36
+</span><span class="lnt"> 37
+</span><span class="lnt"> 38
+</span><span class="lnt"> 39
+</span><span class="lnt"> 40
+</span><span class="lnt"> 41
+</span><span class="lnt"> 42
+</span><span class="lnt"> 43
+</span><span class="lnt"> 44
+</span><span class="lnt"> 45
+</span><span class="lnt"> 46
+</span><span class="lnt"> 47
+</span><span class="lnt"> 48
+</span><span class="lnt"> 49
+</span><span class="lnt"> 50
+</span><span class="lnt"> 51
+</span><span class="lnt"> 52
+</span><span class="lnt"> 53
+</span><span class="lnt"> 54
+</span><span class="lnt"> 55
+</span><span class="lnt"> 56
+</span><span class="lnt"> 57
+</span><span class="lnt"> 58
+</span><span class="lnt"> 59
+</span><span class="lnt"> 60
+</span><span class="lnt"> 61
+</span><span class="lnt"> 62
+</span><span class="lnt"> 63
+</span><span class="lnt"> 64
+</span><span class="lnt"> 65
+</span><span class="lnt"> 66
+</span><span class="lnt"> 67
+</span><span class="lnt"> 68
+</span><span class="lnt"> 69
+</span><span class="lnt"> 70
+</span><span class="lnt"> 71
+</span><span class="lnt"> 72
+</span><span class="lnt"> 73
+</span><span class="lnt"> 74
+</span><span class="lnt"> 75
+</span><span class="lnt"> 76
+</span><span class="lnt"> 77
+</span><span class="lnt"> 78
+</span><span class="lnt"> 79
+</span><span class="lnt"> 80
+</span><span class="lnt"> 81
+</span><span class="lnt"> 82
+</span><span class="lnt"> 83
+</span><span class="lnt"> 84
+</span><span class="lnt"> 85
+</span><span class="lnt"> 86
+</span><span class="lnt"> 87
+</span><span class="lnt"> 88
+</span><span class="lnt"> 89
+</span><span class="lnt"> 90
+</span><span class="lnt"> 91
+</span><span class="lnt"> 92
+</span><span class="lnt"> 93
+</span><span class="lnt"> 94
+</span><span class="lnt"> 95
+</span><span class="lnt"> 96
+</span><span class="lnt"> 97
+</span><span class="lnt"> 98
+</span><span class="lnt"> 99
+</span><span class="lnt">100
+</span><span class="lnt">101
+</span><span class="lnt">102
+</span><span class="lnt">103
+</span><span class="lnt">104
+</span><span class="lnt">105
+</span><span class="lnt">106
+</span><span class="lnt">107
+</span><span class="lnt">108
+</span><span class="lnt">109
+</span><span class="lnt">110
+</span><span class="lnt">111
+</span><span class="lnt">112
+</span><span class="lnt">113
+</span><span class="lnt">114
+</span><span class="lnt">115
+</span><span class="lnt">116
+</span><span class="lnt">117
+</span><span class="lnt">118
+</span><span class="lnt">119
+</span><span class="lnt">120
+</span><span class="lnt">121
+</span><span class="lnt">122
+</span><span class="lnt">123
+</span><span class="lnt">124
+</span><span class="lnt">125
+</span><span class="lnt">126
+</span><span class="lnt">127
+</span><span class="lnt">128
+</span><span class="lnt">129
+</span><span class="lnt">130
+</span><span class="lnt">131
+</span><span class="lnt">132
+</span><span class="lnt">133
+</span><span class="lnt">134
+</span><span class="lnt">135
+</span><span class="lnt">136
+</span><span class="lnt">137
+</span><span class="lnt">138
+</span><span class="lnt">139
+</span><span class="lnt">140
+</span><span class="lnt">141
+</span><span class="lnt">142
+</span><span class="lnt">143
+</span><span class="lnt">144
+</span><span class="lnt">145
+</span><span class="lnt">146
+</span><span class="lnt">147
+</span><span class="lnt">148
+</span><span class="lnt">149
+</span><span class="lnt">150
+</span><span class="lnt">151
+</span><span class="lnt">152
+</span><span class="lnt">153
+</span><span class="lnt">154
+</span><span class="lnt">155
+</span><span class="lnt">156
+</span><span class="lnt">157
+</span><span class="lnt">158
+</span><span class="lnt">159
+</span><span class="lnt">160
+</span><span class="lnt">161
+</span><span class="lnt">162
+</span><span class="lnt">163
+</span><span class="lnt">164
+</span><span class="lnt">165
+</span><span class="lnt">166
+</span><span class="lnt">167
+</span><span class="lnt">168
+</span><span class="lnt">169
+</span><span class="lnt">170
+</span><span class="lnt">171
+</span><span class="lnt">172
+</span><span class="lnt">173
+</span><span class="lnt">174
+</span><span class="lnt">175
+</span><span class="lnt">176
+</span><span class="lnt">177
+</span><span class="lnt">178
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="c1">// 如果是打印版本，则打印退出
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">version</span> <span class="p">{</span>
+		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintln</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stderr</span><span class="p">,</span> <span class="nx">version</span><span class="p">.</span><span class="nx">Version</span><span class="p">)</span>
+		<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+	<span class="p">}</span>
 
-<pre><code class="language-go">func main() {
-	// 如果是打印版本，则打印退出
-	if opts.version {
-		fmt.Fprintln(os.Stderr, version.Version)
-		os.Exit(0)
-	}
+	<span class="nx">flagutil</span><span class="p">.</span><span class="nf">SetFlagsFromEnv</span><span class="p">(</span><span class="nx">flannelFlags</span><span class="p">,</span> <span class="s">&#34;FLANNELD&#34;</span><span class="p">)</span>
 
-	flagutil.SetFlagsFromEnv(flannelFlags, &quot;FLANNELD&quot;)
-
-	// Validate flags
-    // 验证参数，如果续租时间大于24*60或者小于等于0，则直接报错。
-    // 因为默认的租约时间为24*60
-	if opts.subnetLeaseRenewMargin &gt;= 24*60 || opts.subnetLeaseRenewMargin &lt;= 0 {
-		log.Error(&quot;Invalid subnet-lease-renew-margin option, out of acceptable range&quot;)
-		os.Exit(1)
-	}
+	<span class="c1">// Validate flags
+</span><span class="c1"></span>    <span class="c1">// 验证参数，如果续租时间大于24*60或者小于等于0，则直接报错。
+</span><span class="c1"></span>    <span class="c1">// 因为默认的租约时间为24*60
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">subnetLeaseRenewMargin</span> <span class="o">&gt;=</span> <span class="mi">24</span><span class="o">*</span><span class="mi">60</span> <span class="o">||</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">subnetLeaseRenewMargin</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">&#34;Invalid subnet-lease-renew-margin option, out of acceptable range&#34;</span><span class="p">)</span>
+		<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+	<span class="p">}</span>
     
-    // Work out which interface to use
-    // 找出externalInterface，很简单，如果命令行参数指定了使用哪个网卡，则直接使用，若没指定，则需要自己去找默认的网卡，主要是LookupExtIface这个函数来寻找。这个函数中所调用的ip.GetDefaultGatewayIface()是位于pkg目录下，在自己写程序来获取linux主机默认网卡和ip信息的时候也可以直接引用该函数
-	var extIface *backend.ExternalInterface
-	var err error
-	// Check the default interface only if no interfaces are specified
-	if len(opts.iface) == 0 &amp;&amp; len(opts.ifaceRegex) == 0 {
-		extIface, err = LookupExtIface(&quot;&quot;, &quot;&quot;)
-		if err != nil {
-			log.Error(&quot;Failed to find any valid interface to use: &quot;, err)
-			os.Exit(1)
-		}
-	} else {
-		// Check explicitly specified interfaces
-		for _, iface := range opts.iface {
-			extIface, err = LookupExtIface(iface, &quot;&quot;)
-			if err != nil {
-				log.Infof(&quot;Could not find valid interface matching %s: %s&quot;, iface, err)
-			}
+    <span class="c1">// Work out which interface to use
+</span><span class="c1"></span>    <span class="c1">// 找出externalInterface，很简单，如果命令行参数指定了使用哪个网卡，则直接使用，若没指定，则需要自己去找默认的网卡，主要是LookupExtIface这个函数来寻找。这个函数中所调用的ip.GetDefaultGatewayIface()是位于pkg目录下，在自己写程序来获取linux主机默认网卡和ip信息的时候也可以直接引用该函数
+</span><span class="c1"></span>	<span class="kd">var</span> <span class="nx">extIface</span> <span class="o">*</span><span class="nx">backend</span><span class="p">.</span><span class="nx">ExternalInterface</span>
+	<span class="kd">var</span> <span class="nx">err</span> <span class="kt">error</span>
+	<span class="c1">// Check the default interface only if no interfaces are specified
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nx">opts</span><span class="p">.</span><span class="nx">iface</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="nb">len</span><span class="p">(</span><span class="nx">opts</span><span class="p">.</span><span class="nx">ifaceRegex</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+		<span class="nx">extIface</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nf">LookupExtIface</span><span class="p">(</span><span class="s">&#34;&#34;</span><span class="p">,</span> <span class="s">&#34;&#34;</span><span class="p">)</span>
+		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="nx">log</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">&#34;Failed to find any valid interface to use: &#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+			<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+		<span class="p">}</span>
+	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+		<span class="c1">// Check explicitly specified interfaces
+</span><span class="c1"></span>		<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">iface</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">iface</span> <span class="p">{</span>
+			<span class="nx">extIface</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nf">LookupExtIface</span><span class="p">(</span><span class="nx">iface</span><span class="p">,</span> <span class="s">&#34;&#34;</span><span class="p">)</span>
+			<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+				<span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Could not find valid interface matching %s: %s&#34;</span><span class="p">,</span> <span class="nx">iface</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+			<span class="p">}</span>
 
-			if extIface != nil {
-				break
-			}
-		}
+			<span class="k">if</span> <span class="nx">extIface</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+				<span class="k">break</span>
+			<span class="p">}</span>
+		<span class="p">}</span>
 
-		// Check interfaces that match any specified regexes
-		if extIface == nil {
-			for _, ifaceRegex := range opts.ifaceRegex {
-				extIface, err = LookupExtIface(&quot;&quot;, ifaceRegex)
-				if err != nil {
-					log.Infof(&quot;Could not find valid interface matching %s: %s&quot;, ifaceRegex, err)
-				}
+		<span class="c1">// Check interfaces that match any specified regexes
+</span><span class="c1"></span>		<span class="k">if</span> <span class="nx">extIface</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">ifaceRegex</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">ifaceRegex</span> <span class="p">{</span>
+				<span class="nx">extIface</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nf">LookupExtIface</span><span class="p">(</span><span class="s">&#34;&#34;</span><span class="p">,</span> <span class="nx">ifaceRegex</span><span class="p">)</span>
+				<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+					<span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Could not find valid interface matching %s: %s&#34;</span><span class="p">,</span> <span class="nx">ifaceRegex</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+				<span class="p">}</span>
 
-				if extIface != nil {
-					break
-				}
-			}
-		}
+				<span class="k">if</span> <span class="nx">extIface</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+					<span class="k">break</span>
+				<span class="p">}</span>
+			<span class="p">}</span>
+		<span class="p">}</span>
 
-		if extIface == nil {
-			// Exit if any of the specified interfaces do not match
-			log.Error(&quot;Failed to find interface to use that matches the interfaces and/or regexes provided&quot;)
-			os.Exit(1)
-		}
-	}
+		<span class="k">if</span> <span class="nx">extIface</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="c1">// Exit if any of the specified interfaces do not match
+</span><span class="c1"></span>			<span class="nx">log</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">&#34;Failed to find interface to use that matches the interfaces and/or regexes provided&#34;</span><span class="p">)</span>
+			<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
     
-    // 第一步：创建SubnetManager，主要是用来管理subnet的。
-    sm, err := newSubnetManager()
-	if err != nil {
-		log.Error(&quot;Failed to create SubnetManager: &quot;, err)
-		os.Exit(1)
-	}
-	log.Infof(&quot;Created subnet manager: %s&quot;, sm.Name())
+    <span class="c1">// 第一步：创建SubnetManager，主要是用来管理subnet的。
+</span><span class="c1"></span>    <span class="nx">sm</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">newSubnetManager</span><span class="p">()</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">&#34;Failed to create SubnetManager: &#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+		<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+	<span class="p">}</span>
+	<span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Created subnet manager: %s&#34;</span><span class="p">,</span> <span class="nx">sm</span><span class="p">.</span><span class="nf">Name</span><span class="p">())</span>
     
-    // 下述这段代码是控制程序优雅退出的，首先是创建了sigs channel，类型为os.Signal,buffer为1.
-    // 此处两个golang的用法，第一个是context，第二个是sync.waitGroup
-    // Register for SIGINT and SIGTERM
-	log.Info(&quot;Installing signal handlers&quot;)
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+    <span class="c1">// 下述这段代码是控制程序优雅退出的，首先是创建了sigs channel，类型为os.Signal,buffer为1.
+</span><span class="c1"></span>    <span class="c1">// 此处两个golang的用法，第一个是context，第二个是sync.waitGroup
+</span><span class="c1"></span>    <span class="c1">// Register for SIGINT and SIGTERM
+</span><span class="c1"></span>	<span class="nx">log</span><span class="p">.</span><span class="nf">Info</span><span class="p">(</span><span class="s">&#34;Installing signal handlers&#34;</span><span class="p">)</span>
+	<span class="nx">sigs</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+	<span class="nx">signal</span><span class="p">.</span><span class="nf">Notify</span><span class="p">(</span><span class="nx">sigs</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Interrupt</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
 
-	// This is the main context that everything should run in.
-	// All spawned goroutines should exit when cancel is called on this context.
-	// Go routines spawned from main.go coordinate using a WaitGroup. This provides a mechanism to allow the shutdownHandler goroutine
-	// to block until all the goroutines return . If those goroutines spawn other goroutines then they are responsible for
-	// blocking and returning only when cancel() is called.
-	// 创建全局的ctx
-    ctx, cancel := context.WithCancel(context.Background())
+	<span class="c1">// This is the main context that everything should run in.
+</span><span class="c1"></span>	<span class="c1">// All spawned goroutines should exit when cancel is called on this context.
+</span><span class="c1"></span>	<span class="c1">// Go routines spawned from main.go coordinate using a WaitGroup. This provides a mechanism to allow the shutdownHandler goroutine
+</span><span class="c1"></span>	<span class="c1">// to block until all the goroutines return . If those goroutines spawn other goroutines then they are responsible for
+</span><span class="c1"></span>	<span class="c1">// blocking and returning only when cancel() is called.
+</span><span class="c1"></span>	<span class="c1">// 创建全局的ctx
+</span><span class="c1"></span>    <span class="nx">ctx</span><span class="p">,</span> <span class="nx">cancel</span> <span class="o">:=</span> <span class="nx">context</span><span class="p">.</span><span class="nf">WithCancel</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">())</span>
 	
-    // 创建任务
-    wg := sync.WaitGroup{}
+    <span class="c1">// 创建任务
+</span><span class="c1"></span>    <span class="nx">wg</span> <span class="o">:=</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span><span class="p">{}</span>
 
-   // 添加一个任务
-	wg.Add(1)
-	go func() {
-        // shutdownHander中如果监听到系统信号，则调用cancel函数，那么所有的调用都将终止
-		shutdownHandler(ctx, sigs, cancel)
-		wg.Done()
-	}()
+   <span class="c1">// 添加一个任务
+</span><span class="c1"></span>	<span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+        <span class="c1">// shutdownHander中如果监听到系统信号，则调用cancel函数，那么所有的调用都将终止
+</span><span class="c1"></span>		<span class="nf">shutdownHandler</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">sigs</span><span class="p">,</span> <span class="nx">cancel</span><span class="p">)</span>
+		<span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+	<span class="p">}()</span>
     
-    // 如果定义了健康检查端口，则要启动一个http服务监听该端口
-    if opts.healthzPort &gt; 0 {
-		// It's not super easy to shutdown the HTTP server so don't attempt to stop it cleanly
-		go mustRunHealthz()
-	}
+    <span class="c1">// 如果定义了健康检查端口，则要启动一个http服务监听该端口
+</span><span class="c1"></span>    <span class="k">if</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">healthzPort</span> <span class="p">&gt;</span> <span class="mi">0</span> <span class="p">{</span>
+		<span class="c1">// It&#39;s not super easy to shutdown the HTTP server so don&#39;t attempt to stop it cleanly
+</span><span class="c1"></span>		<span class="k">go</span> <span class="nf">mustRunHealthz</span><span class="p">()</span>
+	<span class="p">}</span>
     
-    // 第二步：创建backend，并且通过该backend来注册subnet
-    // Create a backend manager then use it to create the backend and register the network with it.
-	bm := backend.NewManager(ctx, sm, extIface)
-	be, err := bm.GetBackend(config.BackendType)
-	if err != nil {
-		log.Errorf(&quot;Error fetching backend: %s&quot;, err)
-		cancel()
-		wg.Wait()
-		os.Exit(1)
-	}
+    <span class="c1">// 第二步：创建backend，并且通过该backend来注册subnet
+</span><span class="c1"></span>    <span class="c1">// Create a backend manager then use it to create the backend and register the network with it.
+</span><span class="c1"></span>	<span class="nx">bm</span> <span class="o">:=</span> <span class="nx">backend</span><span class="p">.</span><span class="nf">NewManager</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">sm</span><span class="p">,</span> <span class="nx">extIface</span><span class="p">)</span>
+	<span class="nx">be</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">bm</span><span class="p">.</span><span class="nf">GetBackend</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">BackendType</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;Error fetching backend: %s&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+		<span class="nf">cancel</span><span class="p">()</span>
+		<span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+		<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+	<span class="p">}</span>
 
-    // 注册subnet
-	bn, err := be.RegisterNetwork(ctx, wg, config)
-	if err != nil {
-		log.Errorf(&quot;Error registering network: %s&quot;, err)
-		cancel()
-		wg.Wait()
-		os.Exit(1)
-	}
+    <span class="c1">// 注册subnet
+</span><span class="c1"></span>	<span class="nx">bn</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">be</span><span class="p">.</span><span class="nf">RegisterNetwork</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">wg</span><span class="p">,</span> <span class="nx">config</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;Error registering network: %s&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+		<span class="nf">cancel</span><span class="p">()</span>
+		<span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+		<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+	<span class="p">}</span>
     
-    // 第三步：如果指定了ipMasq，则定期同步iptables
-    // Set up ipMasq if needed
-	if opts.ipMasq {
-		if err = recycleIPTables(config.Network, bn.Lease()); err != nil {
-			log.Errorf(&quot;Failed to recycle IPTables rules, %v&quot;, err)
-			cancel()
-			wg.Wait()
-			os.Exit(1)
-		}
-		log.Infof(&quot;Setting up masking rules&quot;)
-		go network.SetupAndEnsureIPTables(network.MasqRules(config.Network, bn.Lease()), opts.iptablesResyncSeconds)
-	}
+    <span class="c1">// 第三步：如果指定了ipMasq，则定期同步iptables
+</span><span class="c1"></span>    <span class="c1">// Set up ipMasq if needed
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">ipMasq</span> <span class="p">{</span>
+		<span class="k">if</span> <span class="nx">err</span> <span class="p">=</span> <span class="nf">recycleIPTables</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">Network</span><span class="p">,</span> <span class="nx">bn</span><span class="p">.</span><span class="nf">Lease</span><span class="p">());</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="nx">log</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;Failed to recycle IPTables rules, %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+			<span class="nf">cancel</span><span class="p">()</span>
+			<span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+			<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+		<span class="p">}</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Setting up masking rules&#34;</span><span class="p">)</span>
+		<span class="k">go</span> <span class="nx">network</span><span class="p">.</span><span class="nf">SetupAndEnsureIPTables</span><span class="p">(</span><span class="nx">network</span><span class="p">.</span><span class="nf">MasqRules</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">Network</span><span class="p">,</span> <span class="nx">bn</span><span class="p">.</span><span class="nf">Lease</span><span class="p">()),</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">iptablesResyncSeconds</span><span class="p">)</span>
+	<span class="p">}</span>
     
-    // 第四步：iptablesForwardRules指定的话，定期去同步指定的iptables
-    // Always enables forwarding rules. This is needed for Docker versions &gt;1.13 (https://docs.docker.com/engine/userguide/networking/default_network/container-communication/#container-communication-between-hosts)
-	// In Docker 1.12 and earlier, the default FORWARD chain policy was ACCEPT.
-	// In Docker 1.13 and later, Docker sets the default policy of the FORWARD chain to DROP.
-	if opts.iptablesForwardRules {
-		log.Infof(&quot;Changing default FORWARD chain policy to ACCEPT&quot;)
-		go network.SetupAndEnsureIPTables(network.ForwardRules(config.Network.String()), opts.iptablesResyncSeconds)
-	}
+    <span class="c1">// 第四步：iptablesForwardRules指定的话，定期去同步指定的iptables
+</span><span class="c1"></span>    <span class="c1">// Always enables forwarding rules. This is needed for Docker versions &gt;1.13 (https://docs.docker.com/engine/userguide/networking/default_network/container-communication/#container-communication-between-hosts)
+</span><span class="c1"></span>	<span class="c1">// In Docker 1.12 and earlier, the default FORWARD chain policy was ACCEPT.
+</span><span class="c1"></span>	<span class="c1">// In Docker 1.13 and later, Docker sets the default policy of the FORWARD chain to DROP.
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">iptablesForwardRules</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Changing default FORWARD chain policy to ACCEPT&#34;</span><span class="p">)</span>
+		<span class="k">go</span> <span class="nx">network</span><span class="p">.</span><span class="nf">SetupAndEnsureIPTables</span><span class="p">(</span><span class="nx">network</span><span class="p">.</span><span class="nf">ForwardRules</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">Network</span><span class="p">.</span><span class="nf">String</span><span class="p">()),</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">iptablesResyncSeconds</span><span class="p">)</span>
+	<span class="p">}</span>
     
-    // 第五步：写入subnet file
-    if err := WriteSubnetFile(opts.subnetFile, config.Network, opts.ipMasq, bn); err != nil {
-		// Continue, even though it failed.
-		log.Warningf(&quot;Failed to write subnet file: %s&quot;, err)
-	} else {
-		log.Infof(&quot;Wrote subnet file to %s&quot;, opts.subnetFile)
-	}
+    <span class="c1">// 第五步：写入subnet file
+</span><span class="c1"></span>    <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">WriteSubnetFile</span><span class="p">(</span><span class="nx">opts</span><span class="p">.</span><span class="nx">subnetFile</span><span class="p">,</span> <span class="nx">config</span><span class="p">.</span><span class="nx">Network</span><span class="p">,</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">ipMasq</span><span class="p">,</span> <span class="nx">bn</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="c1">// Continue, even though it failed.
+</span><span class="c1"></span>		<span class="nx">log</span><span class="p">.</span><span class="nf">Warningf</span><span class="p">(</span><span class="s">&#34;Failed to write subnet file: %s&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Wrote subnet file to %s&#34;</span><span class="p">,</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">subnetFile</span><span class="p">)</span>
+	<span class="p">}</span>
     
-    // 第六步：backend run起来
-    // Start &quot;Running&quot; the backend network. This will block until the context is done so run in another goroutine.
-	log.Info(&quot;Running backend.&quot;)
-	wg.Add(1)
-	go func() {
-		bn.Run(ctx)
-		wg.Done()
-	}()
+    <span class="c1">// 第六步：backend run起来
+</span><span class="c1"></span>    <span class="c1">// Start &#34;Running&#34; the backend network. This will block until the context is done so run in another goroutine.
+</span><span class="c1"></span>	<span class="nx">log</span><span class="p">.</span><span class="nf">Info</span><span class="p">(</span><span class="s">&#34;Running backend.&#34;</span><span class="p">)</span>
+	<span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+		<span class="nx">bn</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span>
+		<span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+	<span class="p">}()</span>
     
-    // 第七步：kube subnet mgr监听subnet lease
-    // Kube subnet mgr doesn't lease the subnet for this node - it just uses the podCidr that's already assigned.
-	if !opts.kubeSubnetMgr {
-		err = MonitorLease(ctx, sm, bn, &amp;wg)
-		if err == errInterrupted {
-			// The lease was &quot;revoked&quot; - shut everything down
-			cancel()
-		}
-	}
+    <span class="c1">// 第七步：kube subnet mgr监听subnet lease
+</span><span class="c1"></span>    <span class="c1">// Kube subnet mgr doesn&#39;t lease the subnet for this node - it just uses the podCidr that&#39;s already assigned.
+</span><span class="c1"></span>	<span class="k">if</span> <span class="p">!</span><span class="nx">opts</span><span class="p">.</span><span class="nx">kubeSubnetMgr</span> <span class="p">{</span>
+		<span class="nx">err</span> <span class="p">=</span> <span class="nf">MonitorLease</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">sm</span><span class="p">,</span> <span class="nx">bn</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">wg</span><span class="p">)</span>
+		<span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">errInterrupted</span> <span class="p">{</span>
+			<span class="c1">// The lease was &#34;revoked&#34; - shut everything down
+</span><span class="c1"></span>			<span class="nf">cancel</span><span class="p">()</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
 
     
-    log.Info(&quot;Waiting for all goroutines to exit&quot;)
-	// Block waiting for all the goroutines to finish.
-	wg.Wait()
-	log.Info(&quot;Exiting cleanly...&quot;)
-	os.Exit(0)
-    
-</code></pre>
-
+    <span class="nx">log</span><span class="p">.</span><span class="nf">Info</span><span class="p">(</span><span class="s">&#34;Waiting for all goroutines to exit&#34;</span><span class="p">)</span>
+	<span class="c1">// Block waiting for all the goroutines to finish.
+</span><span class="c1"></span>	<span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+	<span class="nx">log</span><span class="p">.</span><span class="nf">Info</span><span class="p">(</span><span class="s">&#34;Exiting cleanly...&#34;</span><span class="p">)</span>
+	<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    </code></pre></td></tr></table>
+</div>
+</div>
 <p>上述main函数中列出了7个主要的步骤，下面依次分析。</p>
 
-<h2 id="3-第一步-创建subnetmanager">3.第一步：创建SubnetManager</h2>
+<h2 id="3-第一步-创建subnetmanager"><a href="#3-第一步-创建subnetmanager" class="anchor-link"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="icon anchor-icon"><path d="M326.612 185.391c59.747 59.809 58.927 155.698.36 214.59-.11.12-.24.25-.36.37l-67.2 67.2c-59.27 59.27-155.699 59.262-214.96 0-59.27-59.26-59.27-155.7 0-214.96l37.106-37.106c9.84-9.84 26.786-3.3 27.294 10.606.648 17.722 3.826 35.527 9.69 52.721 1.986 5.822.567 12.262-3.783 16.612l-13.087 13.087c-28.026 28.026-28.905 73.66-1.155 101.96 28.024 28.579 74.086 28.749 102.325.51l67.2-67.19c28.191-28.191 28.073-73.757 0-101.83-3.701-3.694-7.429-6.564-10.341-8.569a16.037 16.037 0 0 1-6.947-12.606c-.396-10.567 3.348-21.456 11.698-29.806l21.054-21.055c5.521-5.521 14.182-6.199 20.584-1.731a152.482 152.482 0 0 1 20.522 17.197zM467.547 44.449c-59.261-59.262-155.69-59.27-214.96 0l-67.2 67.2c-.12.12-.25.25-.36.37-58.566 58.892-59.387 154.781.36 214.59a152.454 152.454 0 0 0 20.521 17.196c6.402 4.468 15.064 3.789 20.584-1.731l21.054-21.055c8.35-8.35 12.094-19.239 11.698-29.806a16.037 16.037 0 0 0-6.947-12.606c-2.912-2.005-6.64-4.875-10.341-8.569-28.073-28.073-28.191-73.639 0-101.83l67.2-67.19c28.239-28.239 74.3-28.069 102.325.51 27.75 28.3 26.872 73.934-1.155 101.96l-13.087 13.087c-4.35 4.35-5.769 10.79-3.783 16.612 5.864 17.194 9.042 34.999 9.69 52.721.509 13.906 17.454 20.446 27.294 10.606l37.106-37.106c59.271-59.259 59.271-155.699.001-214.959z"/></svg></a>3.第一步：创建SubnetManager</h2>
 
 <p>main.go中的newSubnetManager函数：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">newSubnetManager</span><span class="p">()</span> <span class="p">(</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">Manager</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+	<span class="k">if</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">kubeSubnetMgr</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="nx">kube</span><span class="p">.</span><span class="nf">NewSubnetManager</span><span class="p">(</span><span class="nx">opts</span><span class="p">.</span><span class="nx">kubeApiUrl</span><span class="p">,</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">kubeConfigFile</span><span class="p">,</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">kubeAnnotationPrefix</span><span class="p">,</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">netConfPath</span><span class="p">)</span>
+	<span class="p">}</span>
 
-<pre><code class="language-go">func newSubnetManager() (subnet.Manager, error) {
-	if opts.kubeSubnetMgr {
-		return kube.NewSubnetManager(opts.kubeApiUrl, opts.kubeConfigFile, opts.kubeAnnotationPrefix, opts.netConfPath)
-	}
+	<span class="nx">cfg</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">etcdv2</span><span class="p">.</span><span class="nx">EtcdConfig</span><span class="p">{</span>
+		<span class="nx">Endpoints</span><span class="p">:</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Split</span><span class="p">(</span><span class="nx">opts</span><span class="p">.</span><span class="nx">etcdEndpoints</span><span class="p">,</span> <span class="s">&#34;,&#34;</span><span class="p">),</span>
+		<span class="nx">Keyfile</span><span class="p">:</span>   <span class="nx">opts</span><span class="p">.</span><span class="nx">etcdKeyfile</span><span class="p">,</span>
+		<span class="nx">Certfile</span><span class="p">:</span>  <span class="nx">opts</span><span class="p">.</span><span class="nx">etcdCertfile</span><span class="p">,</span>
+		<span class="nx">CAFile</span><span class="p">:</span>    <span class="nx">opts</span><span class="p">.</span><span class="nx">etcdCAFile</span><span class="p">,</span>
+		<span class="nx">Prefix</span><span class="p">:</span>    <span class="nx">opts</span><span class="p">.</span><span class="nx">etcdPrefix</span><span class="p">,</span>
+		<span class="nx">Username</span><span class="p">:</span>  <span class="nx">opts</span><span class="p">.</span><span class="nx">etcdUsername</span><span class="p">,</span>
+		<span class="nx">Password</span><span class="p">:</span>  <span class="nx">opts</span><span class="p">.</span><span class="nx">etcdPassword</span><span class="p">,</span>
+	<span class="p">}</span>
 
-	cfg := &amp;etcdv2.EtcdConfig{
-		Endpoints: strings.Split(opts.etcdEndpoints, &quot;,&quot;),
-		Keyfile:   opts.etcdKeyfile,
-		Certfile:  opts.etcdCertfile,
-		CAFile:    opts.etcdCAFile,
-		Prefix:    opts.etcdPrefix,
-		Username:  opts.etcdUsername,
-		Password:  opts.etcdPassword,
-	}
+	<span class="c1">// Attempt to renew the lease for the subnet specified in the subnetFile
+</span><span class="c1"></span>	<span class="nx">prevSubnet</span> <span class="o">:=</span> <span class="nf">ReadCIDRFromSubnetFile</span><span class="p">(</span><span class="nx">opts</span><span class="p">.</span><span class="nx">subnetFile</span><span class="p">,</span> <span class="s">&#34;FLANNEL_SUBNET&#34;</span><span class="p">)</span>
 
-	// Attempt to renew the lease for the subnet specified in the subnetFile
-	prevSubnet := ReadCIDRFromSubnetFile(opts.subnetFile, &quot;FLANNEL_SUBNET&quot;)
-
-	return etcdv2.NewLocalManager(cfg, prevSubnet)
-}
-</code></pre>
-
+	<span class="k">return</span> <span class="nx">etcdv2</span><span class="p">.</span><span class="nf">NewLocalManager</span><span class="p">(</span><span class="nx">cfg</span><span class="p">,</span> <span class="nx">prevSubnet</span><span class="p">)</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
 <p>如果使用了kubeSubnetMgr，则调用kube.NewSubnetManager，否则调用etcdv2。这一点需要说明的是etcd发展到现在支持不同的版本，v2和v3，且v3版本具有很多优势。flannel仓库中v2版本相关的代码提交是2 years之前，因此可见目前flannel实际上只支持kube-apiserver作为后端存储，也是默认的存储方式。</p>
 
 <p>./flannel/subnet/kube/kube.go：</p>
-
-<pre><code class="language-go">type kubeSubnetManager struct {
-	// 往node的yaml文件中添加的annotations
-	annotations    annotations
-	// 与kube-apiserver交互的client
-	client         clientset.Interface
-    // 运行在哪个node上
-	nodeName       string
-    // node lister
-	nodeStore      listers.NodeLister
-    // node controller
-	nodeController cache.Controller
-	subnetConf     *subnet.Config
-	events         chan subnet.Event
-}
-</code></pre>
-
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">type</span> <span class="nx">kubeSubnetManager</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="c1">// 往node的yaml文件中添加的annotations
+</span><span class="c1"></span>	<span class="nx">annotations</span>    <span class="nx">annotations</span>
+	<span class="c1">// 与kube-apiserver交互的client
+</span><span class="c1"></span>	<span class="nx">client</span>         <span class="nx">clientset</span><span class="p">.</span><span class="nx">Interface</span>
+    <span class="c1">// 运行在哪个node上
+</span><span class="c1"></span>	<span class="nx">nodeName</span>       <span class="kt">string</span>
+    <span class="c1">// node lister
+</span><span class="c1"></span>	<span class="nx">nodeStore</span>      <span class="nx">listers</span><span class="p">.</span><span class="nx">NodeLister</span>
+    <span class="c1">// node controller
+</span><span class="c1"></span>	<span class="nx">nodeController</span> <span class="nx">cache</span><span class="p">.</span><span class="nx">Controller</span>
+	<span class="nx">subnetConf</span>     <span class="o">*</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">Config</span>
+	<span class="nx">events</span>         <span class="kd">chan</span> <span class="nx">subnet</span><span class="p">.</span><span class="nx">Event</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
 <p>下面进入flannel/subnet/kube/kube.go里的NewSubnetManager函数中，看看都干了啥：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span><span class="lnt">59
+</span><span class="lnt">60
+</span><span class="lnt">61
+</span><span class="lnt">62
+</span><span class="lnt">63
+</span><span class="lnt">64
+</span><span class="lnt">65
+</span><span class="lnt">66
+</span><span class="lnt">67
+</span><span class="lnt">68
+</span><span class="lnt">69
+</span><span class="lnt">70
+</span><span class="lnt">71
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">NewSubnetManager</span><span class="p">(</span><span class="nx">apiUrl</span><span class="p">,</span> <span class="nx">kubeconfig</span><span class="p">,</span> <span class="nx">prefix</span><span class="p">,</span> <span class="nx">netConfPath</span> <span class="kt">string</span><span class="p">)</span> <span class="p">(</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">Manager</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+	<span class="c1">//先看看入参函数：kube-apiserver的地址，kubeconfig的地址，prefix是给node打anno的时候前缀，netConfPath是配置存储目录，实际上安装完成之后，是通过configmap的形式挂载到/etc/kube-flannel/net-conf.json里的
+</span><span class="c1"></span>	<span class="kd">var</span> <span class="nx">cfg</span> <span class="o">*</span><span class="nx">rest</span><span class="p">.</span><span class="nx">Config</span>
+	<span class="kd">var</span> <span class="nx">err</span> <span class="kt">error</span>
+	<span class="c1">// Try to build kubernetes config from a master url or a kubeconfig filepath. If neither masterUrl
+</span><span class="c1"></span>	<span class="c1">// or kubeconfigPath are passed in we fall back to inClusterConfig. If inClusterConfig fails,
+</span><span class="c1"></span>	<span class="c1">// we fallback to the default config.
+</span><span class="c1"></span>	<span class="nx">cfg</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">clientcmd</span><span class="p">.</span><span class="nf">BuildConfigFromFlags</span><span class="p">(</span><span class="nx">apiUrl</span><span class="p">,</span> <span class="nx">kubeconfig</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;fail to create kubernetes config: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
 
-<pre><code class="language-go">func NewSubnetManager(apiUrl, kubeconfig, prefix, netConfPath string) (subnet.Manager, error) {
-	//先看看入参函数：kube-apiserver的地址，kubeconfig的地址，prefix是给node打anno的时候前缀，netConfPath是配置存储目录，实际上安装完成之后，是通过configmap的形式挂载到/etc/kube-flannel/net-conf.json里的
-	var cfg *rest.Config
-	var err error
-	// Try to build kubernetes config from a master url or a kubeconfig filepath. If neither masterUrl
-	// or kubeconfigPath are passed in we fall back to inClusterConfig. If inClusterConfig fails,
-	// we fallback to the default config.
-	cfg, err = clientcmd.BuildConfigFromFlags(apiUrl, kubeconfig)
-	if err != nil {
-		return nil, fmt.Errorf(&quot;fail to create kubernetes config: %v&quot;, err)
-	}
+	<span class="nx">c</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">clientset</span><span class="p">.</span><span class="nf">NewForConfig</span><span class="p">(</span><span class="nx">cfg</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;unable to initialize client: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+    <span class="c1">// 上述是通过提供的配置，创建clientset，用来连接kube-apiserver
+</span><span class="c1"></span>
+	<span class="c1">// The kube subnet mgr needs to know the k8s node name that it&#39;s running on so it can annotate it.
+</span><span class="c1"></span>	<span class="c1">// If we&#39;re running as a pod then the POD_NAME and POD_NAMESPACE will be populated and can be used to find the node
+</span><span class="c1"></span>	<span class="c1">// name. Otherwise, the environment variable NODE_NAME can be passed in.
+</span><span class="c1"></span>	<span class="c1">// 获取nodename
+</span><span class="c1"></span>    <span class="nx">nodeName</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;NODE_NAME&#34;</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">nodeName</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
+		<span class="nx">podName</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;POD_NAME&#34;</span><span class="p">)</span>
+		<span class="nx">podNamespace</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;POD_NAMESPACE&#34;</span><span class="p">)</span>
+		<span class="k">if</span> <span class="nx">podName</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="o">||</span> <span class="nx">podNamespace</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
+			<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;env variables POD_NAME and POD_NAMESPACE must be set&#34;</span><span class="p">)</span>
+		<span class="p">}</span>
 
-	c, err := clientset.NewForConfig(cfg)
-	if err != nil {
-		return nil, fmt.Errorf(&quot;unable to initialize client: %v&quot;, err)
-	}
-    // 上述是通过提供的配置，创建clientset，用来连接kube-apiserver
+		<span class="nx">pod</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Pods</span><span class="p">(</span><span class="nx">podNamespace</span><span class="p">).</span><span class="nf">Get</span><span class="p">(</span><span class="nx">podName</span><span class="p">,</span> <span class="nx">metav1</span><span class="p">.</span><span class="nx">GetOptions</span><span class="p">{})</span>
+		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;error retrieving pod spec for &#39;%s/%s&#39;: %v&#34;</span><span class="p">,</span> <span class="nx">podNamespace</span><span class="p">,</span> <span class="nx">podName</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+		<span class="p">}</span>
+		<span class="nx">nodeName</span> <span class="p">=</span> <span class="nx">pod</span><span class="p">.</span><span class="nx">Spec</span><span class="p">.</span><span class="nx">NodeName</span>
+		<span class="k">if</span> <span class="nx">nodeName</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
+			<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;node name not present in pod spec &#39;%s/%s&#39;&#34;</span><span class="p">,</span> <span class="nx">podNamespace</span><span class="p">,</span> <span class="nx">podName</span><span class="p">)</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
 
-	// The kube subnet mgr needs to know the k8s node name that it's running on so it can annotate it.
-	// If we're running as a pod then the POD_NAME and POD_NAMESPACE will be populated and can be used to find the node
-	// name. Otherwise, the environment variable NODE_NAME can be passed in.
-	// 获取nodename
-    nodeName := os.Getenv(&quot;NODE_NAME&quot;)
-	if nodeName == &quot;&quot; {
-		podName := os.Getenv(&quot;POD_NAME&quot;)
-		podNamespace := os.Getenv(&quot;POD_NAMESPACE&quot;)
-		if podName == &quot;&quot; || podNamespace == &quot;&quot; {
-			return nil, fmt.Errorf(&quot;env variables POD_NAME and POD_NAMESPACE must be set&quot;)
-		}
+    <span class="c1">// 读取网络配置文件
+</span><span class="c1"></span>	<span class="nx">netConf</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">ioutil</span><span class="p">.</span><span class="nf">ReadFile</span><span class="p">(</span><span class="nx">netConfPath</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;failed to read net conf: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
 
-		pod, err := c.Pods(podNamespace).Get(podName, metav1.GetOptions{})
-		if err != nil {
-			return nil, fmt.Errorf(&quot;error retrieving pod spec for '%s/%s': %v&quot;, podNamespace, podName, err)
-		}
-		nodeName = pod.Spec.NodeName
-		if nodeName == &quot;&quot; {
-			return nil, fmt.Errorf(&quot;node name not present in pod spec '%s/%s'&quot;, podNamespace, podName)
-		}
-	}
+    <span class="c1">// 解析网络配置
+</span><span class="c1"></span>	<span class="nx">sc</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">subnet</span><span class="p">.</span><span class="nf">ParseConfig</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">netConf</span><span class="p">))</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;error parsing subnet config: %s&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
 
-    // 读取网络配置文件
-	netConf, err := ioutil.ReadFile(netConfPath)
-	if err != nil {
-		return nil, fmt.Errorf(&quot;failed to read net conf: %v&quot;, err)
-	}
+    <span class="c1">// 初始化并运行subnetManager，传入的参数有clientset，网络配置，nodename，anno前缀，具体的new和Run函数下文分析
+</span><span class="c1"></span>	<span class="nx">sm</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">newKubeSubnetManager</span><span class="p">(</span><span class="nx">c</span><span class="p">,</span> <span class="nx">sc</span><span class="p">,</span> <span class="nx">nodeName</span><span class="p">,</span> <span class="nx">prefix</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;error creating network manager: %s&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+	<span class="k">go</span> <span class="nx">sm</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">())</span>
 
-    // 解析网络配置
-	sc, err := subnet.ParseConfig(string(netConf))
-	if err != nil {
-		return nil, fmt.Errorf(&quot;error parsing subnet config: %s&quot;, err)
-	}
+    <span class="c1">// 下面确保hasSynced
+</span><span class="c1"></span>	<span class="nx">glog</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Waiting %s for node controller to sync&#34;</span><span class="p">,</span> <span class="nx">nodeControllerSyncTimeout</span><span class="p">)</span>
+	<span class="nx">err</span> <span class="p">=</span> <span class="nx">wait</span><span class="p">.</span><span class="nf">Poll</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span> <span class="nx">nodeControllerSyncTimeout</span><span class="p">,</span> <span class="kd">func</span><span class="p">()</span> <span class="p">(</span><span class="kt">bool</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="nx">sm</span><span class="p">.</span><span class="nx">nodeController</span><span class="p">.</span><span class="nf">HasSynced</span><span class="p">(),</span> <span class="kc">nil</span>
+	<span class="p">})</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;error waiting for nodeController to sync state: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+	<span class="nx">glog</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Node controller sync successful&#34;</span><span class="p">)</span>
 
-    // 初始化并运行subnetManager，传入的参数有clientset，网络配置，nodename，anno前缀，具体的new和Run函数下文分析
-	sm, err := newKubeSubnetManager(c, sc, nodeName, prefix)
-	if err != nil {
-		return nil, fmt.Errorf(&quot;error creating network manager: %s&quot;, err)
-	}
-	go sm.Run(context.Background())
-
-    // 下面确保hasSynced
-	glog.Infof(&quot;Waiting %s for node controller to sync&quot;, nodeControllerSyncTimeout)
-	err = wait.Poll(time.Second, nodeControllerSyncTimeout, func() (bool, error) {
-		return sm.nodeController.HasSynced(), nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf(&quot;error waiting for nodeController to sync state: %v&quot;, err)
-	}
-	glog.Infof(&quot;Node controller sync successful&quot;)
-
-	return sm, nil
-}
-</code></pre>
-
+	<span class="k">return</span> <span class="nx">sm</span><span class="p">,</span> <span class="kc">nil</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
 <p>下面去看看如何newKubeSubnetManager和让其Run起来的。</p>
-
-<pre><code class="language-go">func newKubeSubnetManager(c clientset.Interface, sc *subnet.Config, nodeName, prefix string) (*kubeSubnetManager, error) {
-   var err error
-   var ksm kubeSubnetManager
-   ksm.annotations, err = newAnnotations(prefix)
-   if err != nil {
-      return nil, err
-   }
-   ksm.client = c
-   ksm.nodeName = nodeName
-   ksm.subnetConf = sc
-   ksm.events = make(chan subnet.Event, 5000)
-   indexer, controller := cache.NewIndexerInformer(
-      &amp;cache.ListWatch{
-         ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-            return ksm.client.CoreV1().Nodes().List(options)
-         },
-         WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-            return ksm.client.CoreV1().Nodes().Watch(options)
-         },
-      },
-      &amp;v1.Node{},
-      resyncPeriod,
-      cache.ResourceEventHandlerFuncs{
-         AddFunc: func(obj interface{}) {
-            ksm.handleAddLeaseEvent(subnet.EventAdded, obj)
-         },
-         UpdateFunc: ksm.handleUpdateLeaseEvent,
-         DeleteFunc: func(obj interface{}) {
-            node, isNode := obj.(*v1.Node)
-            // We can get DeletedFinalStateUnknown instead of *api.Node here and we need to handle that correctly.
-            if !isNode {
-               deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
-               if !ok {
-                  glog.Infof(&quot;Error received unexpected object: %v&quot;, obj)
-                  return
-               }
-               node, ok = deletedState.Obj.(*v1.Node)
-               if !ok {
-                  glog.Infof(&quot;Error deletedFinalStateUnknown contained non-Node object: %v&quot;, deletedState.Obj)
-                  return
-               }
-               obj = node
-            }
-            ksm.handleAddLeaseEvent(subnet.EventRemoved, obj)
-         },
-      },
-      cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-   )
-   ksm.nodeController = controller
-   ksm.nodeStore = listers.NewNodeLister(indexer)
-   return &amp;ksm, nil
-}
-</code></pre>
-
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">newKubeSubnetManager</span><span class="p">(</span><span class="nx">c</span> <span class="nx">clientset</span><span class="p">.</span><span class="nx">Interface</span><span class="p">,</span> <span class="nx">sc</span> <span class="o">*</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">Config</span><span class="p">,</span> <span class="nx">nodeName</span><span class="p">,</span> <span class="nx">prefix</span> <span class="kt">string</span><span class="p">)</span> <span class="p">(</span><span class="o">*</span><span class="nx">kubeSubnetManager</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+   <span class="kd">var</span> <span class="nx">err</span> <span class="kt">error</span>
+   <span class="kd">var</span> <span class="nx">ksm</span> <span class="nx">kubeSubnetManager</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">annotations</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nf">newAnnotations</span><span class="p">(</span><span class="nx">prefix</span><span class="p">)</span>
+   <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+   <span class="p">}</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">client</span> <span class="p">=</span> <span class="nx">c</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">nodeName</span> <span class="p">=</span> <span class="nx">nodeName</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">subnetConf</span> <span class="p">=</span> <span class="nx">sc</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">events</span> <span class="p">=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">subnet</span><span class="p">.</span><span class="nx">Event</span><span class="p">,</span> <span class="mi">5000</span><span class="p">)</span>
+   <span class="nx">indexer</span><span class="p">,</span> <span class="nx">controller</span> <span class="o">:=</span> <span class="nx">cache</span><span class="p">.</span><span class="nf">NewIndexerInformer</span><span class="p">(</span>
+      <span class="o">&amp;</span><span class="nx">cache</span><span class="p">.</span><span class="nx">ListWatch</span><span class="p">{</span>
+         <span class="nx">ListFunc</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">options</span> <span class="nx">metav1</span><span class="p">.</span><span class="nx">ListOptions</span><span class="p">)</span> <span class="p">(</span><span class="nx">runtime</span><span class="p">.</span><span class="nx">Object</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nx">ksm</span><span class="p">.</span><span class="nx">client</span><span class="p">.</span><span class="nf">CoreV1</span><span class="p">().</span><span class="nf">Nodes</span><span class="p">().</span><span class="nf">List</span><span class="p">(</span><span class="nx">options</span><span class="p">)</span>
+         <span class="p">},</span>
+         <span class="nx">WatchFunc</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">options</span> <span class="nx">metav1</span><span class="p">.</span><span class="nx">ListOptions</span><span class="p">)</span> <span class="p">(</span><span class="nx">watch</span><span class="p">.</span><span class="nx">Interface</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nx">ksm</span><span class="p">.</span><span class="nx">client</span><span class="p">.</span><span class="nf">CoreV1</span><span class="p">().</span><span class="nf">Nodes</span><span class="p">().</span><span class="nf">Watch</span><span class="p">(</span><span class="nx">options</span><span class="p">)</span>
+         <span class="p">},</span>
+      <span class="p">},</span>
+      <span class="o">&amp;</span><span class="nx">v1</span><span class="p">.</span><span class="nx">Node</span><span class="p">{},</span>
+      <span class="nx">resyncPeriod</span><span class="p">,</span>
+      <span class="nx">cache</span><span class="p">.</span><span class="nx">ResourceEventHandlerFuncs</span><span class="p">{</span>
+         <span class="nx">AddFunc</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">obj</span> <span class="kd">interface</span><span class="p">{})</span> <span class="p">{</span>
+            <span class="nx">ksm</span><span class="p">.</span><span class="nf">handleAddLeaseEvent</span><span class="p">(</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">EventAdded</span><span class="p">,</span> <span class="nx">obj</span><span class="p">)</span>
+         <span class="p">},</span>
+         <span class="nx">UpdateFunc</span><span class="p">:</span> <span class="nx">ksm</span><span class="p">.</span><span class="nx">handleUpdateLeaseEvent</span><span class="p">,</span>
+         <span class="nx">DeleteFunc</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">obj</span> <span class="kd">interface</span><span class="p">{})</span> <span class="p">{</span>
+            <span class="nx">node</span><span class="p">,</span> <span class="nx">isNode</span> <span class="o">:=</span> <span class="nx">obj</span><span class="p">.(</span><span class="o">*</span><span class="nx">v1</span><span class="p">.</span><span class="nx">Node</span><span class="p">)</span>
+            <span class="c1">// We can get DeletedFinalStateUnknown instead of *api.Node here and we need to handle that correctly.
+</span><span class="c1"></span>            <span class="k">if</span> <span class="p">!</span><span class="nx">isNode</span> <span class="p">{</span>
+               <span class="nx">deletedState</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="nx">obj</span><span class="p">.(</span><span class="nx">cache</span><span class="p">.</span><span class="nx">DeletedFinalStateUnknown</span><span class="p">)</span>
+               <span class="k">if</span> <span class="p">!</span><span class="nx">ok</span> <span class="p">{</span>
+                  <span class="nx">glog</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Error received unexpected object: %v&#34;</span><span class="p">,</span> <span class="nx">obj</span><span class="p">)</span>
+                  <span class="k">return</span>
+               <span class="p">}</span>
+               <span class="nx">node</span><span class="p">,</span> <span class="nx">ok</span> <span class="p">=</span> <span class="nx">deletedState</span><span class="p">.</span><span class="nx">Obj</span><span class="p">.(</span><span class="o">*</span><span class="nx">v1</span><span class="p">.</span><span class="nx">Node</span><span class="p">)</span>
+               <span class="k">if</span> <span class="p">!</span><span class="nx">ok</span> <span class="p">{</span>
+                  <span class="nx">glog</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Error deletedFinalStateUnknown contained non-Node object: %v&#34;</span><span class="p">,</span> <span class="nx">deletedState</span><span class="p">.</span><span class="nx">Obj</span><span class="p">)</span>
+                  <span class="k">return</span>
+               <span class="p">}</span>
+               <span class="nx">obj</span> <span class="p">=</span> <span class="nx">node</span>
+            <span class="p">}</span>
+            <span class="nx">ksm</span><span class="p">.</span><span class="nf">handleAddLeaseEvent</span><span class="p">(</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">EventRemoved</span><span class="p">,</span> <span class="nx">obj</span><span class="p">)</span>
+         <span class="p">},</span>
+      <span class="p">},</span>
+      <span class="nx">cache</span><span class="p">.</span><span class="nx">Indexers</span><span class="p">{</span><span class="nx">cache</span><span class="p">.</span><span class="nx">NamespaceIndex</span><span class="p">:</span> <span class="nx">cache</span><span class="p">.</span><span class="nx">MetaNamespaceIndexFunc</span><span class="p">},</span>
+   <span class="p">)</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">nodeController</span> <span class="p">=</span> <span class="nx">controller</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">nodeStore</span> <span class="p">=</span> <span class="nx">listers</span><span class="p">.</span><span class="nf">NewNodeLister</span><span class="p">(</span><span class="nx">indexer</span><span class="p">)</span>
+   <span class="k">return</span> <span class="o">&amp;</span><span class="nx">ksm</span><span class="p">,</span> <span class="kc">nil</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
 <p>总结一下上述函数都干了啥：</p>
 
 <ul>
@@ -616,212 +1173,423 @@ drwxr-xr-x 1 user 197121    0 8月  30 18:33 version/
 
 <p>此外，ksm.Run函数就是运行起来。</p>
 
-<h2 id="4-第二步-创建backend">4.第二步：创建backend</h2>
+<h2 id="4-第二步-创建backend"><a href="#4-第二步-创建backend" class="anchor-link"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="icon anchor-icon"><path d="M326.612 185.391c59.747 59.809 58.927 155.698.36 214.59-.11.12-.24.25-.36.37l-67.2 67.2c-59.27 59.27-155.699 59.262-214.96 0-59.27-59.26-59.27-155.7 0-214.96l37.106-37.106c9.84-9.84 26.786-3.3 27.294 10.606.648 17.722 3.826 35.527 9.69 52.721 1.986 5.822.567 12.262-3.783 16.612l-13.087 13.087c-28.026 28.026-28.905 73.66-1.155 101.96 28.024 28.579 74.086 28.749 102.325.51l67.2-67.19c28.191-28.191 28.073-73.757 0-101.83-3.701-3.694-7.429-6.564-10.341-8.569a16.037 16.037 0 0 1-6.947-12.606c-.396-10.567 3.348-21.456 11.698-29.806l21.054-21.055c5.521-5.521 14.182-6.199 20.584-1.731a152.482 152.482 0 0 1 20.522 17.197zM467.547 44.449c-59.261-59.262-155.69-59.27-214.96 0l-67.2 67.2c-.12.12-.25.25-.36.37-58.566 58.892-59.387 154.781.36 214.59a152.454 152.454 0 0 0 20.521 17.196c6.402 4.468 15.064 3.789 20.584-1.731l21.054-21.055c8.35-8.35 12.094-19.239 11.698-29.806a16.037 16.037 0 0 0-6.947-12.606c-2.912-2.005-6.64-4.875-10.341-8.569-28.073-28.073-28.191-73.639 0-101.83l67.2-67.19c28.239-28.239 74.3-28.069 102.325.51 27.75 28.3 26.872 73.934-1.155 101.96l-13.087 13.087c-4.35 4.35-5.769 10.79-3.783 16.612 5.864 17.194 9.042 34.999 9.69 52.721.509 13.906 17.454 20.446 27.294 10.606l37.106-37.106c59.271-59.259 59.271-155.699.001-214.959z"/></svg></a>4.第二步：创建backend</h2>
 
 <p>首先看backend/manager.go中的NewManager函数</p>
-
-<pre><code class="language-go">func NewManager(ctx context.Context, sm subnet.Manager, extIface *ExternalInterface) Manager {
-   return &amp;manager{
-      ctx:      ctx,
-      sm:       sm,
-      extIface: extIface,
-      active:   make(map[string]Backend),
-   }
-}
-</code></pre>
-
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">NewManager</span><span class="p">(</span><span class="nx">ctx</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span> <span class="nx">sm</span> <span class="nx">subnet</span><span class="p">.</span><span class="nx">Manager</span><span class="p">,</span> <span class="nx">extIface</span> <span class="o">*</span><span class="nx">ExternalInterface</span><span class="p">)</span> <span class="nx">Manager</span> <span class="p">{</span>
+   <span class="k">return</span> <span class="o">&amp;</span><span class="nx">manager</span><span class="p">{</span>
+      <span class="nx">ctx</span><span class="p">:</span>      <span class="nx">ctx</span><span class="p">,</span>
+      <span class="nx">sm</span><span class="p">:</span>       <span class="nx">sm</span><span class="p">,</span>
+      <span class="nx">extIface</span><span class="p">:</span> <span class="nx">extIface</span><span class="p">,</span>
+      <span class="nx">active</span><span class="p">:</span>   <span class="nb">make</span><span class="p">(</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="nx">Backend</span><span class="p">),</span>
+   <span class="p">}</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
 <p>只是返回了一个manager对象：</p>
-
-<pre><code class="language-go">type manager struct {
-   ctx      context.Context
-    // 上文创建好的ksm
-   sm       subnet.Manager
-    // 用来与外界通信的interface
-   extIface *ExternalInterface
-    // 互斥锁
-   mux      sync.Mutex
-   active   map[string]Backend
-   wg       sync.WaitGroup
-}
-</code></pre>
-
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">type</span> <span class="nx">manager</span> <span class="kd">struct</span> <span class="p">{</span>
+   <span class="nx">ctx</span>      <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span>
+    <span class="c1">// 上文创建好的ksm
+</span><span class="c1"></span>   <span class="nx">sm</span>       <span class="nx">subnet</span><span class="p">.</span><span class="nx">Manager</span>
+    <span class="c1">// 用来与外界通信的interface
+</span><span class="c1"></span>   <span class="nx">extIface</span> <span class="o">*</span><span class="nx">ExternalInterface</span>
+    <span class="c1">// 互斥锁
+</span><span class="c1"></span>   <span class="nx">mux</span>      <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+   <span class="nx">active</span>   <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="nx">Backend</span>
+   <span class="nx">wg</span>       <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
 <p>下面看bm.GetBackend(config.BackendType)函数：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">bm</span> <span class="o">*</span><span class="nx">manager</span><span class="p">)</span> <span class="nf">GetBackend</span><span class="p">(</span><span class="nx">backendType</span> <span class="kt">string</span><span class="p">)</span> <span class="p">(</span><span class="nx">Backend</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">//传入的参数是config的BackendType，此配置项是通过configmap写入到flannel的pod中的，因此是一个固定的值，比如vxlan
+</span><span class="c1"></span>   <span class="nx">bm</span><span class="p">.</span><span class="nx">mux</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+   <span class="k">defer</span> <span class="nx">bm</span><span class="p">.</span><span class="nx">mux</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
 
-<pre><code class="language-go">func (bm *manager) GetBackend(backendType string) (Backend, error) {
-    //传入的参数是config的BackendType，此配置项是通过configmap写入到flannel的pod中的，因此是一个固定的值，比如vxlan
-   bm.mux.Lock()
-   defer bm.mux.Unlock()
+   <span class="nx">betype</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">ToLower</span><span class="p">(</span><span class="nx">backendType</span><span class="p">)</span>
+   <span class="c1">// see if one is already running
+</span><span class="c1"></span>   <span class="k">if</span> <span class="nx">be</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="nx">bm</span><span class="p">.</span><span class="nx">active</span><span class="p">[</span><span class="nx">betype</span><span class="p">];</span> <span class="nx">ok</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="nx">be</span><span class="p">,</span> <span class="kc">nil</span>
+   <span class="p">}</span>
 
-   betype := strings.ToLower(backendType)
-   // see if one is already running
-   if be, ok := bm.active[betype]; ok {
-      return be, nil
-   }
+   <span class="c1">// first request, need to create and run it
+</span><span class="c1"></span>   <span class="nx">befunc</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="nx">constructors</span><span class="p">[</span><span class="nx">betype</span><span class="p">]</span>
+   <span class="k">if</span> <span class="p">!</span><span class="nx">ok</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;unknown backend type: %v&#34;</span><span class="p">,</span> <span class="nx">betype</span><span class="p">)</span>
+   <span class="p">}</span>
 
-   // first request, need to create and run it
-   befunc, ok := constructors[betype]
-   if !ok {
-      return nil, fmt.Errorf(&quot;unknown backend type: %v&quot;, betype)
-   }
+   <span class="nx">be</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">befunc</span><span class="p">(</span><span class="nx">bm</span><span class="p">.</span><span class="nx">sm</span><span class="p">,</span> <span class="nx">bm</span><span class="p">.</span><span class="nx">extIface</span><span class="p">)</span>
+   <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+   <span class="p">}</span>
+   <span class="nx">bm</span><span class="p">.</span><span class="nx">active</span><span class="p">[</span><span class="nx">betype</span><span class="p">]</span> <span class="p">=</span> <span class="nx">be</span>
 
-   be, err := befunc(bm.sm, bm.extIface)
-   if err != nil {
-      return nil, err
-   }
-   bm.active[betype] = be
+   <span class="nx">bm</span><span class="p">.</span><span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+   <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+      <span class="o">&lt;-</span><span class="nx">bm</span><span class="p">.</span><span class="nx">ctx</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
 
-   bm.wg.Add(1)
-   go func() {
-      &lt;-bm.ctx.Done()
+      <span class="c1">// TODO(eyakubovich): this obviosly introduces a race.
+</span><span class="c1"></span>      <span class="c1">// GetBackend() could get called while we are here.
+</span><span class="c1"></span>      <span class="c1">// Currently though, all backends&#39; Run exit only
+</span><span class="c1"></span>      <span class="c1">// on shutdown
+</span><span class="c1"></span>
+      <span class="nx">bm</span><span class="p">.</span><span class="nx">mux</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+      <span class="nb">delete</span><span class="p">(</span><span class="nx">bm</span><span class="p">.</span><span class="nx">active</span><span class="p">,</span> <span class="nx">betype</span><span class="p">)</span>
+      <span class="nx">bm</span><span class="p">.</span><span class="nx">mux</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
 
-      // TODO(eyakubovich): this obviosly introduces a race.
-      // GetBackend() could get called while we are here.
-      // Currently though, all backends' Run exit only
-      // on shutdown
+      <span class="nx">bm</span><span class="p">.</span><span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+   <span class="p">}()</span>
 
-      bm.mux.Lock()
-      delete(bm.active, betype)
-      bm.mux.Unlock()
-
-      bm.wg.Done()
-   }()
-
-   return be, nil
-}
-</code></pre>
-
+   <span class="k">return</span> <span class="nx">be</span><span class="p">,</span> <span class="kc">nil</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
 <p>main.go的289行bn, err := be.RegisterNetwork(ctx, wg, config)，实际上调用的是具体的backend的Register，比如配置了vxlan就调用vxlan的register：</p>
 
 <p>flannel/backend/vxlan/vxlan.go:</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">be</span> <span class="o">*</span><span class="nx">VXLANBackend</span><span class="p">)</span> <span class="nf">RegisterNetwork</span><span class="p">(</span><span class="nx">ctx</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span><span class="p">,</span> <span class="nx">config</span> <span class="o">*</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">Config</span><span class="p">)</span> <span class="p">(</span><span class="nx">backend</span><span class="p">.</span><span class="nx">Network</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+   <span class="c1">// Parse our configuration
+</span><span class="c1"></span>   <span class="nx">cfg</span> <span class="o">:=</span> <span class="kd">struct</span> <span class="p">{</span>
+      <span class="nx">VNI</span>           <span class="kt">int</span>
+      <span class="nx">Port</span>          <span class="kt">int</span>
+      <span class="nx">GBP</span>           <span class="kt">bool</span>
+      <span class="nx">Learning</span>      <span class="kt">bool</span>
+      <span class="nx">DirectRouting</span> <span class="kt">bool</span>
+   <span class="p">}{</span>
+      <span class="nx">VNI</span><span class="p">:</span> <span class="nx">defaultVNI</span><span class="p">,</span>
+   <span class="p">}</span>
 
-<pre><code class="language-go">func (be *VXLANBackend) RegisterNetwork(ctx context.Context, wg sync.WaitGroup, config *subnet.Config) (backend.Network, error) {
-   // Parse our configuration
-   cfg := struct {
-      VNI           int
-      Port          int
-      GBP           bool
-      Learning      bool
-      DirectRouting bool
-   }{
-      VNI: defaultVNI,
-   }
+   <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">Backend</span><span class="p">)</span> <span class="p">&gt;</span> <span class="mi">0</span> <span class="p">{</span>
+      <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Unmarshal</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">Backend</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">cfg</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+         <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;error decoding VXLAN backend config: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+      <span class="p">}</span>
+   <span class="p">}</span>
+   <span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;VXLAN config: VNI=%d Port=%d GBP=%v Learning=%v DirectRouting=%v&#34;</span><span class="p">,</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">VNI</span><span class="p">,</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">Port</span><span class="p">,</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">GBP</span><span class="p">,</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">Learning</span><span class="p">,</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">DirectRouting</span><span class="p">)</span>
 
-   if len(config.Backend) &gt; 0 {
-      if err := json.Unmarshal(config.Backend, &amp;cfg); err != nil {
-         return nil, fmt.Errorf(&quot;error decoding VXLAN backend config: %v&quot;, err)
-      }
-   }
-   log.Infof(&quot;VXLAN config: VNI=%d Port=%d GBP=%v Learning=%v DirectRouting=%v&quot;, cfg.VNI, cfg.Port, cfg.GBP, cfg.Learning, cfg.DirectRouting)
+   <span class="nx">devAttrs</span> <span class="o">:=</span> <span class="nx">vxlanDeviceAttrs</span><span class="p">{</span>
+      <span class="nx">vni</span><span class="p">:</span>       <span class="nb">uint32</span><span class="p">(</span><span class="nx">cfg</span><span class="p">.</span><span class="nx">VNI</span><span class="p">),</span>
+      <span class="nx">name</span><span class="p">:</span>      <span class="nx">fmt</span><span class="p">.</span><span class="nf">Sprintf</span><span class="p">(</span><span class="s">&#34;flannel.%v&#34;</span><span class="p">,</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">VNI</span><span class="p">),</span>
+      <span class="nx">vtepIndex</span><span class="p">:</span> <span class="nx">be</span><span class="p">.</span><span class="nx">extIface</span><span class="p">.</span><span class="nx">Iface</span><span class="p">.</span><span class="nx">Index</span><span class="p">,</span>
+      <span class="nx">vtepAddr</span><span class="p">:</span>  <span class="nx">be</span><span class="p">.</span><span class="nx">extIface</span><span class="p">.</span><span class="nx">IfaceAddr</span><span class="p">,</span>
+      <span class="nx">vtepPort</span><span class="p">:</span>  <span class="nx">cfg</span><span class="p">.</span><span class="nx">Port</span><span class="p">,</span>
+      <span class="nx">gbp</span><span class="p">:</span>       <span class="nx">cfg</span><span class="p">.</span><span class="nx">GBP</span><span class="p">,</span>
+      <span class="nx">learning</span><span class="p">:</span>  <span class="nx">cfg</span><span class="p">.</span><span class="nx">Learning</span><span class="p">,</span>
+   <span class="p">}</span>
 
-   devAttrs := vxlanDeviceAttrs{
-      vni:       uint32(cfg.VNI),
-      name:      fmt.Sprintf(&quot;flannel.%v&quot;, cfg.VNI),
-      vtepIndex: be.extIface.Iface.Index,
-      vtepAddr:  be.extIface.IfaceAddr,
-      vtepPort:  cfg.Port,
-      gbp:       cfg.GBP,
-      learning:  cfg.Learning,
-   }
+   <span class="nx">dev</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">newVXLANDevice</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">devAttrs</span><span class="p">)</span>
+   <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+   <span class="p">}</span>
+   <span class="nx">dev</span><span class="p">.</span><span class="nx">directRouting</span> <span class="p">=</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">DirectRouting</span>
 
-   dev, err := newVXLANDevice(&amp;devAttrs)
-   if err != nil {
-      return nil, err
-   }
-   dev.directRouting = cfg.DirectRouting
+   <span class="nx">subnetAttrs</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">newSubnetAttrs</span><span class="p">(</span><span class="nx">be</span><span class="p">.</span><span class="nx">extIface</span><span class="p">.</span><span class="nx">ExtAddr</span><span class="p">,</span> <span class="nx">dev</span><span class="p">.</span><span class="nf">MACAddr</span><span class="p">())</span>
+   <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+   <span class="p">}</span>
 
-   subnetAttrs, err := newSubnetAttrs(be.extIface.ExtAddr, dev.MACAddr())
-   if err != nil {
-      return nil, err
-   }
+   <span class="nx">lease</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">be</span><span class="p">.</span><span class="nx">subnetMgr</span><span class="p">.</span><span class="nf">AcquireLease</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">subnetAttrs</span><span class="p">)</span>
+   <span class="k">switch</span> <span class="nx">err</span> <span class="p">{</span>
+   <span class="k">case</span> <span class="kc">nil</span><span class="p">:</span>
+   <span class="k">case</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Canceled</span><span class="p">,</span> <span class="nx">context</span><span class="p">.</span><span class="nx">DeadlineExceeded</span><span class="p">:</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+   <span class="k">default</span><span class="p">:</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;failed to acquire lease: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+   <span class="p">}</span>
 
-   lease, err := be.subnetMgr.AcquireLease(ctx, subnetAttrs)
-   switch err {
-   case nil:
-   case context.Canceled, context.DeadlineExceeded:
-      return nil, err
-   default:
-      return nil, fmt.Errorf(&quot;failed to acquire lease: %v&quot;, err)
-   }
+   <span class="c1">// Ensure that the device has a /32 address so that no broadcast routes are created.
+</span><span class="c1"></span>   <span class="c1">// This IP is just used as a source address for host to workload traffic (so
+</span><span class="c1"></span>   <span class="c1">// the return path for the traffic has an address on the flannel network to use as the destination)
+</span><span class="c1"></span>   <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">dev</span><span class="p">.</span><span class="nf">Configure</span><span class="p">(</span><span class="nx">ip</span><span class="p">.</span><span class="nx">IP4Net</span><span class="p">{</span><span class="nx">IP</span><span class="p">:</span> <span class="nx">lease</span><span class="p">.</span><span class="nx">Subnet</span><span class="p">.</span><span class="nx">IP</span><span class="p">,</span> <span class="nx">PrefixLen</span><span class="p">:</span> <span class="mi">32</span><span class="p">});</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;failed to configure interface %s: %s&#34;</span><span class="p">,</span> <span class="nx">dev</span><span class="p">.</span><span class="nx">link</span><span class="p">.</span><span class="nf">Attrs</span><span class="p">().</span><span class="nx">Name</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+   <span class="p">}</span>
 
-   // Ensure that the device has a /32 address so that no broadcast routes are created.
-   // This IP is just used as a source address for host to workload traffic (so
-   // the return path for the traffic has an address on the flannel network to use as the destination)
-   if err := dev.Configure(ip.IP4Net{IP: lease.Subnet.IP, PrefixLen: 32}); err != nil {
-      return nil, fmt.Errorf(&quot;failed to configure interface %s: %s&quot;, dev.link.Attrs().Name, err)
-   }
-
-   return newNetwork(be.subnetMgr, be.extIface, dev, ip.IP4Net{}, lease)
-}
-</code></pre>
-
-<p>该函数主要是创建vxlan设备。配置对应的路由，给vxlan设备配置IP信息等等。</p>
-<ul class="pa0">
-  
-</ul>
-<div class="mt6">
-      
-        <div id="disqus_thread"></div>
-<script type="application/javascript">
-    var disqus_config = function () {
-    
-    
-    
-    };
-    (function() {
-        if (["localhost", "127.0.0.1"].indexOf(window.location.hostname) != -1) {
-            document.getElementById('disqus_thread').innerHTML = 'Disqus comments not available by default when the website is previewed locally.';
-            return;
-        }
-        var d = document, s = d.createElement('script'); s.async = true;
-        s.src = '//' + "qsyqian" + '.disqus.com/embed.js';
-        s.setAttribute('data-timestamp', +new Date());
-        (d.head || d.body).appendChild(s);
-    })();
-</script>
-<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
-<a href="https://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
-      
-      <div id="commento"></div>
-<script defer src="https://cdn.commento.io/js/commento.js"></script>
-
-      </div>
-    </section>
-
-    <aside class="w-30-l mt6-l">
-
-
-
-
-</aside>
-
-  </article>
-
-    </main>
-    <footer class="bg-black bottom-0 w-100 pa3" role="contentinfo">
-  <div class="flex justify-between">
-  <a class="f4 fw4 hover-white no-underline white-70 dn dib-ns pv2 ph3" href="https://qsyqian.github.io/" >
-    &copy;  qianshuangyang 2019 
-  </a>
-    <div>
-
-
-
-
-
-
-
-
-
-
-
+   <span class="k">return</span> <span class="nf">newNetwork</span><span class="p">(</span><span class="nx">be</span><span class="p">.</span><span class="nx">subnetMgr</span><span class="p">,</span> <span class="nx">be</span><span class="p">.</span><span class="nx">extIface</span><span class="p">,</span> <span class="nx">dev</span><span class="p">,</span> <span class="nx">ip</span><span class="p">.</span><span class="nx">IP4Net</span><span class="p">{},</span> <span class="nx">lease</span><span class="p">)</span>
+<span class="p">}</span></code></pre></td></tr></table>
 </div>
-  </div>
-</footer>
+</div>
+<p>该函数主要是创建vxlan设备。配置对应的路由，给vxlan设备配置IP信息等等。</p>
+</div>
 
+        </article>
+
+        
+
+        
+    
+    
+    
+        <ul class="post-copyright">
+            <li class="copyright-item author">作者：<a href="https://qsyqian.github.io/" target="_blank">qianshuangyang</a></li>
+            
+                
+                
+                
+                
+                <li class="copyright-item link">链接：<a href="/post/flannel-source-code-analysis/" target="_blank">https://qsyqian.github.io/post/flannel-source-code-analysis/</a></li>
+            
+            
+                <li class="copyright-item license">版权：<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" target="_blank">CC BY-NC-SA 4.0</a></li>
+            
+        </ul>
     
 
-  <script src="/dist/js/app.3fc0f988d21662902933.js"></script>
+
+        
+    <div class="updated-badge-container"><div title="Updated @ 2019-11-24 19:03:04 CST" style="cursor:help;display:inline-block">
+
+<svg xmlns="http://www.w3.org/2000/svg" width="130" height="20" class="updated-badge"><linearGradient id="b" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="a"><rect width="130" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#a)"><path class="updated-badge-left" d="M0 0h55v20H0z"/><path class="updated-badge-right" d="M55 0h75v20H55z"/><path fill="url(#b)" d="M0 0h130v20H0z"/></g><g fill="#fff" text-anchor="middle" font-size="110"><text x="285" y="150" fill="#010101" fill-opacity=".3" textLength="450" transform="scale(.1)">updated</text><text x="285" y="140" textLength="450" transform="scale(.1)">updated</text><text x="915" y="150" fill="#010101" fill-opacity=".3" textLength="650" transform="scale(.1)">2019-11-24</text><text x="915" y="140" textLength="650" transform="scale(.1)">2019-11-24</text></g></svg></div></div>
 
 
-  </body>
+        
+
+        
+    
+    
+
+
+        
+    
+
+
+        
+
+        
+
+        
+    
+        
+        
+    
+    
+    
+    
+        <ul class="post-nav">
+            
+                <li class="post-nav-prev">
+                    <a href="/post/flannel-pod-communication-analysis/" rel="prev">< Flannel 模式网络详解（vxlan）</a>
+                </li>
+            
+            
+                <li class="post-nav-next">
+                    <a href="/post/linux-vxlan-implement/" rel="next">手动创建vxlan网络连接container ></a>
+                </li>
+            
+        </ul>
+    
+
+
+        
+
+    </div>
+</main>
+
+            
+    <div id="back-to-top" class="back-to-top">
+        <a href="#"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" class="icon"><path d="M34.9 289.5l-22.2-22.2c-9.4-9.4-9.4-24.6 0-33.9L207 39c9.4-9.4 24.6-9.4 33.9 0l194.3 194.3c9.4 9.4 9.4 24.6 0 33.9L413 289.4c-9.5 9.5-25 9.3-34.3-.4L264 168.6V456c0 13.3-10.7 24-24 24h-32c-13.3 0-24-10.7-24-24V168.6L69.2 289.1c-9.3 9.8-24.8 10-34.3.4z"/></svg></a>
+    </div>
+
+            
+    <footer id="footer" class="footer">
+        <div class="footer-inner"><div class="site-info">©&nbsp;1969–2019&nbsp;<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="icon footer-icon"><path d="M462.3 62.6C407.5 15.9 326 24.3 275.7 76.2L256 96.5l-19.7-20.3C186.1 24.3 104.5 15.9 49.7 62.6c-62.8 53.6-66.1 149.8-9.9 207.9l193.5 199.8c12.5 12.9 32.8 12.9 45.3 0l193.5-199.8c56.3-58.1 53-154.3-9.8-207.9z"/></svg>&nbsp;qianshuangyang</div>
+                <div class="powered-by">Powered by <a href="https://github.com/gohugoio/hugo" target="_blank">Hugo</a> | Theme is <a href="https://github.com/reuixiy/hugo-theme-meme" target="_blank">MemE</a></div>
+                <div class="site-copyright"><a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh" target="_blank">CC BY-NC-SA 4.0</a></div>
+
+            
+        </div>
+    </footer>
+
+        </div>
+        <script src="/js/meme.min.28a5d4816af314c49aa3cbde0f1fcf915fde38249ea2822037483dabeba1c680.js" integrity="sha256-KKXUgWrzFMSao8veDx/PkV/eOCSeooIgN0g9q+uhxoA=" data-no-instant></script>
+
+
+    <script data-no-instant>InstantClick.init();</script>
+
+
+    <script data-no-instant>
+        InstantClick.on('change', function () {
+            backToTop();
+        });
+    </script>
+
+
+
+    <script data-no-instant>
+        InstantClick.on('change', function () {
+            const userPrefers = localStorage.getItem('theme');
+            const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            const lightModeMediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+            if (userPrefers === "dark") {
+                changeModeMeta("dark");
+                changeMode("🌙", "chroma", "chroma-dark");
+            } else if (userPrefers === "light") {
+                changeModeMeta("light");
+                changeMode("🌞", "chroma-dark", "chroma");
+            } else if (darkModeMediaQuery.matches) {
+                changeModeMeta("dark");
+                changeMode("🌙", "chroma", "chroma-dark");
+            } else if (lightModeMediaQuery.matches) {
+                changeModeMeta("light");
+                changeMode("🌞", "chroma-dark", "chroma");
+            }
+        });
+    </script>
+
+    
+    <script src="https://cdn.jsdelivr.net/gh/cferdinandi/smooth-scroll/dist/smooth-scroll.polyfills.min.js"></script>
+
+<script>
+    var scroll = new SmoothScroll('a[href*="#"]', {
+        speedAsDuration: true
+    });
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </body>
 </html>

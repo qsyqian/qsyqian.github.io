@@ -1,0 +1,2758 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="zh-CN">
+    <title type="text">qianshuangyang</title>
+    <subtitle type="html">MemE 是一个强大且可高度定制的 GoHugo 博客主题，专为个人博客设计。</subtitle>
+    <updated>2019-12-31T15:01:23+08:00</updated>
+    <id>https://qsyqian.github.io/</id>
+    <link rel="alternate" type="text/html" href="https://qsyqian.github.io/" />
+    <link rel="self" type="application/atom+xml" href="https://qsyqian.github.io/atom.xml" />
+    <author>
+            <name>qianshuangyang</name>
+            <uri>https://qsyqian.github.io/</uri>
+            
+                <email>qsyqian@gmail.com</email>
+            </author>
+    <rights>[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh)</rights>
+    <generator uri="https://gohugo.io/" version="0.59.1">Hugo</generator>
+        <entry>
+            <title type="text">ovs中debug数据包流向</title>
+            <link rel="alternate" type="text/html" href="https://qsyqian.github.io/post/ovs-trace-usage/" />
+            <id>https://qsyqian.github.io/post/ovs-trace-usage/</id>
+            <updated>2019-11-24T19:03:04+08:00</updated>
+            <published>2019-11-14T09:41:10+08:00</published>
+            <author>
+                    <name>qianshuangyang</name>
+                    <uri>https://qsyqian.github.io/</uri>
+                    <email>qsyqian@gmail.com</email>
+                    </author>
+            <rights>[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh)</rights>
+    
+    <summary type="html"><![CDATA[ovs中debug数据包流向 ovs是一个可编程软件交换机，因此它可以在数据包级别做动……]]></summary>
+            
+                <content type="html"><![CDATA[
+
+<h2 id="ovs中debug数据包流向">ovs中debug数据包流向</h2>
+
+<p>ovs是一个可编程软件交换机，因此它可以在数据包级别做动作。本文主要介绍了如何使用trace工具来跟踪数据包在datapath中的流动路径。</p>
+
+<h3 id="数据包跟踪">数据包跟踪</h3>
+
+<p>为了更好地理解该工具，使用下述流表来举例：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="nv">table</span><span class="o">=</span><span class="m">3</span>,ip,tcp,tcp_dst<span class="o">=</span><span class="m">80</span>,action<span class="o">=</span>output:2
+<span class="nv">table</span><span class="o">=</span><span class="m">2</span>,ip,tcp,tcp_dst<span class="o">=</span><span class="m">22</span>,action<span class="o">=</span>output:1
+<span class="nv">table</span><span class="o">=</span><span class="m">0</span>,in_port<span class="o">=</span><span class="m">3</span>,ip,nw_src<span class="o">=</span><span class="m">192</span>.0.2.0/24,action<span class="o">=</span>resubmit<span class="o">(</span>,2<span class="o">)</span>
+<span class="nv">table</span><span class="o">=</span><span class="m">0</span>,in_port<span class="o">=</span><span class="m">3</span>,ip,nw_src<span class="o">=</span><span class="m">198</span>.51.100.0/24,action<span class="o">=</span>resubmit<span class="o">(</span>,3<span class="o">)</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>第一行定义了在table=3中的，tcp目的端口为80的匹配，如果能匹配成功，则转发到端口2。</p>
+
+<p>第二行定义了在table=2中的，tcp目的端口为22的匹配，如果匹配成功，则转发到端口1。</p>
+
+<p>其余两行定义了源IP的匹配规则，如果能匹配成功，则通过resubmit转发到对应的table上。</p>
+
+<p>现在来看下，假如一个数据包的源IP为192.0.2.1，目的端口为22，从端口1流入，该怎么通过上述流表：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ ovs-appctl ofproto/trace br0 <span class="nv">in_port</span><span class="o">=</span><span class="m">3</span>,tcp,nw_src<span class="o">=</span><span class="m">192</span>.0.2.2,tcp_dst<span class="o">=</span><span class="m">22</span>
+Flow: tcp,in_port<span class="o">=</span><span class="m">3</span>,vlan_tci<span class="o">=</span>0x0000,dl_src<span class="o">=</span><span class="m">00</span>:00:00:00:00:00,dl_dst<span class="o">=</span><span class="m">00</span>:00:00:00:00:00,nw_src<span class="o">=</span><span class="m">192</span>.0.2.2,nw_dst<span class="o">=</span><span class="m">0</span>.0.0.0,nw_tos<span class="o">=</span><span class="m">0</span>,nw_ecn<span class="o">=</span><span class="m">0</span>,nw_ttl<span class="o">=</span><span class="m">0</span>,tp_src<span class="o">=</span><span class="m">0</span>,tp_dst<span class="o">=</span><span class="m">22</span>,tcp_flags<span class="o">=</span><span class="m">0</span>
+
+bridge<span class="o">(</span><span class="s2">&#34;br0&#34;</span><span class="o">)</span>
+-------------
+ <span class="m">0</span>. ip,in_port<span class="o">=</span><span class="m">3</span>,nw_src<span class="o">=</span><span class="m">192</span>.0.2.0/24, priority <span class="m">32768</span>
+    resubmit<span class="o">(</span>,2<span class="o">)</span>
+ <span class="m">2</span>. tcp,tp_dst<span class="o">=</span><span class="m">22</span>, priority <span class="m">32768</span>
+    output:1
+
+Final flow: unchanged
+Megaflow: <span class="nv">recirc_id</span><span class="o">=</span><span class="m">0</span>,tcp,in_port<span class="o">=</span><span class="m">3</span>,nw_src<span class="o">=</span><span class="m">192</span>.0.2.0/24,nw_frag<span class="o">=</span>no,tp_dst<span class="o">=</span><span class="m">22</span>
+Datapath actions: <span class="m">1</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>第一行是跟踪的命令。br0是数据包要通过的网桥。剩下的参数就是描述数据包本身。比如说，<code>nw_src</code>匹配数据包的源IP。所有的参数可参见文档<a href="http://www.openvswitch.org//support/dist-docs/ovs-fields.7.pdf" target="_blank">ovs-fields</a>。</p>
+
+<p>第二行是从第一行提取出来的流。未指定的参数都设置为0。</p>
+
+<p>第二部分就是数据包在br0中流通的过程。可以看到，在表0中，匹配到了对应的数据包，并且给出了对应的action（resubmit到了表2中）。然后以数字2开头的，表示数据包在表2中的流向过程，由于匹配到了目的端口为22，因此将数据包转发到端口1里。</p>
+
+<p>总的来说，可以跟踪数据包整个的流向直到最后从某个端口转发出去或者drop掉。最后，跟踪工具给出了Megafkow，来匹配数据包的所有的字段。</p>
+
+<p>下面来看同样的数据包但是目的端口不同，是如何转发的。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ ovs-appctl ofproto/trace br0 <span class="nv">in_port</span><span class="o">=</span><span class="m">3</span>,tcp,nw_src<span class="o">=</span><span class="m">192</span>.0.2.2,tcp_dst<span class="o">=</span><span class="m">80</span>
+Flow: tcp,in_port<span class="o">=</span><span class="m">3</span>,vlan_tci<span class="o">=</span>0x0000,dl_src<span class="o">=</span><span class="m">00</span>:00:00:00:00:00,dl_dst<span class="o">=</span><span class="m">00</span>:00:00:00:00:00,nw_src<span class="o">=</span><span class="m">192</span>.0.2.2,nw_dst<span class="o">=</span><span class="m">0</span>.0.0.0,nw_tos<span class="o">=</span><span class="m">0</span>,nw_ecn<span class="o">=</span><span class="m">0</span>,nw_ttl<span class="o">=</span><span class="m">0</span>,tp_src<span class="o">=</span><span class="m">0</span>,tp_dst<span class="o">=</span><span class="m">80</span>,tcp_flags<span class="o">=</span><span class="m">0</span>
+
+bridge<span class="o">(</span><span class="s2">&#34;br0&#34;</span><span class="o">)</span>
+-------------
+ <span class="m">0</span>. ip,in_port<span class="o">=</span><span class="m">3</span>,nw_src<span class="o">=</span><span class="m">192</span>.0.2.0/24, priority <span class="m">32768</span>
+    resubmit<span class="o">(</span>,2<span class="o">)</span>
+ <span class="m">2</span>. No match.
+    drop
+
+Final flow: unchanged
+Megaflow: <span class="nv">recirc_id</span><span class="o">=</span><span class="m">0</span>,tcp,in_port<span class="o">=</span><span class="m">3</span>,nw_src<span class="o">=</span><span class="m">192</span>.0.2.0/24,nw_frag<span class="o">=</span>no,tp_dst<span class="o">=</span>0x40/0xffc0
+Datapath actions: drop</code></pre></td></tr></table>
+</div>
+</div>
+<p>在数据匹配那一部分可以看到，数据包在table=0匹配到，是因为源IP匹配，因此转发给table=2 。在table=2中没有匹配到一条规则。这种情况称之为table miss。根据使用的ovs的版本不一样，出现table miss的时候的action也不一样。上述例子中，默认动作为drop。</p>
+]]></content>
+            
+            
+            
+            
+            
+                
+                    
+                
+                    
+                
+            
+        </entry>
+    
+        <entry>
+            <title type="text">K8s 从懵圈到熟练 – 集群网络详解【转载阿里云公众号】</title>
+            <link rel="alternate" type="text/html" href="https://qsyqian.github.io/post/k8s-cluster-network/" />
+            <id>https://qsyqian.github.io/post/k8s-cluster-network/</id>
+            <updated>2019-11-24T19:03:04+08:00</updated>
+            <published>2019-10-07T14:38:01+08:00</published>
+            <author>
+                    <name>qianshuangyang</name>
+                    <uri>https://qsyqian.github.io/</uri>
+                    <email>qsyqian@gmail.com</email>
+                    </author>
+            <rights>[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh)</rights>
+    
+    <summary type="html"><![CDATA[K8s 从懵圈到熟练 – 集群网络详解 导读： 阿里云 K8S 集群网络目前有两种方案：一种是 flannel 方案；另外……]]></summary>
+            
+                <content type="html"><![CDATA[
+
+<h1 id="k8s-从懵圈到熟练-集群网络详解">K8s 从懵圈到熟练 – 集群网络详解</h1>
+
+<h3 id="导读"><strong>导读：</strong></h3>
+
+<p>阿里云 K8S 集群网络目前有两种方案：一种是 flannel 方案；另外一种是基于 calico 和弹性网卡 eni 的 terway 方案。Terway 和 flannel 类似，不同的地方在于 terway 支持 Pod 弹性网卡，以及 NetworkPolicy 功能。本文中，作者基于当前的 1.12.6 版本，以 flannel 为例，深入分析阿里云 K8S 集群网络的实现方法。</p>
+
+<p>### 鸟瞰</p>
+
+<p>总体上来说，阿里云 K8S 集群网络配置完成之后，如下图所示：包括</p>
+
+<ul>
+<li>集群 CIDR</li>
+<li>VPC 路由表</li>
+<li>节点网络</li>
+<li>节点的 podCIDR</li>
+<li>节点上的虚拟网桥 cni0</li>
+<li>连接 Pod 和网桥的 veth</li>
+</ul>
+
+<p><img src="http://tva1.sinaimg.cn/large/007X8olVly1g7ppfv0k1qj30u00ig0t6.jpg" alt="" /></p>
+
+<p>类似的图大家可能在很多文章中都看过，但因为其中相关配置过于复杂，比较难理解。这里我们可以看下这些配置背后的逻辑。</p>
+
+<p>基本上我们可以把这些配置分三种情况来理解：集群配置，节点配置以及 Pod 配置。与这三种情况对应的，其实是对集群网络 IP 段的三次划分：首先是集群 CIDR，接着是为每个节点分配 podCIDR（即集群 CIDR 的子网段），最后在 podCIDR 里为每个 Pod 分配自己的 IP。</p>
+
+<p><img src="http://tva1.sinaimg.cn/large/007X8olVly1g7ppii312dj30u00bxwep.jpg" alt="" /></p>
+
+<h3 id="集群网络创建">集群网络创建</h3>
+
+<h4 id="初始阶段">初始阶段</h4>
+
+<p>集群的创建，基于云资源 VPC 和 ECS，在创建完 VPC 和 ECS 之后，我们基本上可以得到如下图的资源配置。我们得到一个 VPC，这个 VPC 的网段是 192.168.0.0/16，我们得到若干 ECS，他们从 VPC 网段里分配到 IP 地址。</p>
+
+<p><img src="http://tva1.sinaimg.cn/large/007X8olVly1g7ppkt0vibj30u00igglo.jpg" alt="" /></p>
+
+<h4 id="集群阶段">集群阶段</h4>
+
+<p>在以上出初始资源的基础上，我们利用集群创建控制台得到集群 CIDR。这个值会以参数的形式传给集群节点 provision 脚本，并被脚本传给集群节点配置工具 kubeadm。kubeadm 最后把这个参数写入集群控制器静态 Pod 的 yaml 文件 kube-controller-manager.yaml。</p>
+
+<p><img src="http://tva1.sinaimg.cn/large/007X8olVly1g7ppw8m9i7j30u00k00sz.jpg" alt="" /></p>
+
+<p>集群控制器有了这个参数，在节点 kubelet 注册节点到集群的时候，集群控制器会为每个注册节点，划分一个子网出来，即为每个节点分配 podCIDR。如上图，Node B 的子网是 172.16.8.1/25，而 Node A 的子网是 172.16.0.128/25。这个配置会记录到集群 node 的 podCIDR 数据项里。</p>
+
+<h4 id="节点阶段">节点阶段</h4>
+
+<p>经过以上集群阶段，K8S 有了集群 CIDR，以及为每个节点划分的 podCIDR。在此基础上，集群会下发 flanneld 到每个阶段上，进一步搭建节点上，可以给 Pod 使用的网络框架。这里主要有两个操作：</p>
+
+<ul>
+<li>第一个是集群通过 Cloud Controller Manager 给 VPC 配置路由表项。路由表项对每个节点有一条，每一条的意思是，如果 VPC 路由收到的目的地址是某一个节点 podCIDR 的 IP 地址，那么路由会把这个网络包转发到对应的 ECS 上；</li>
+<li>第二个是创建虚拟网桥 cni0 以及与 cni0 相关的路由。这些配置的作用是，从阶段外部进来的网络包，如果目的 IP 是 podCIDR，则会被节点转发到 cni0 虚拟局域网里。</li>
+</ul>
+
+<p>注意：实际实现上，cni0 的创建，是在第一个使用 Pod 网络的 Pod 被调度到节点上的时候，由下一节中 flannal cni 创建的，但是从逻辑上来说，cni0 属于节点网络，不属于 Pod 网络，所以在此描述。</p>
+
+<p><img src="http://tva1.sinaimg.cn/large/007X8olVly1g7ppxeg3h4j30u00k5jry.jpg" alt="" /></p>
+
+<h4 id="pod阶段">pod阶段</h4>
+
+<p>在前边的三个阶段，集群实际上已经为 Pod 之间搭建了网络通信的干道。这个时候，如果集群把一个 Pod 调度到节点上，kubelet 会通过 flannel cni 为这个 Pod 本身创建网络命名空间和 veth 设备，然后，把其中一个 veth 设备加入到 cni0 虚拟网桥里，并为 Pod 内的 veth 设备配置 IP 地址。这样 Pod 就和网络通信的干道连接在了一起。</p>
+
+<p>这里需要强调的是，前一节的 flanneld 和这一节的 flannel cni 完全是两个组件。flanneld 是一个 daemonset 下发到每个节点的 pod，它的作用是搭建网络（干道），而 flannel cni 是节点创建的时候，通过 kubernetes-cni 这个 rpm 包安装的 cni 插件，其被 kubelet 调用，用来为具体的 pod 创建网络（分枝）。</p>
+
+<p>理解这两者的区别，有助于我们理解 flanneld 和 flannel cni 相关的配置文件的用途。比如 /run/flannel/subnet.env，是 flanneld 创建的，为 flannel cni 提供输入的一个环境变量文件；又比如 /etc/cni/net.d/10-flannel.conf，也是 flanneld pod（准确的说，是 pod 里的脚本 install-cni）从 pod 里拷贝到节点目录，给 flannel cni 使用的子网配置文件。</p>
+
+<p><img src="http://tva1.sinaimg.cn/large/007X8olVly1g7ppyagj1tj30u00kdgmf.jpg" alt="" /></p>
+
+<h3 id="通信">通信</h3>
+
+<p>以上完成 Pod 网络环境搭建。基于以上的网络环境，Pod 可以完成四种通信：本地通信；同节点 Pod 通信；跨节点 Pod 通信；以及 Pod 和 Pod 网络之外的实体通信。</p>
+
+<p><img src="http://tva1.sinaimg.cn/large/007X8olVly1g7ppyykf4gj30u00mbwf0.jpg" alt="" /></p>
+
+<ul>
+<li><p>其中本地通信，说的是 Pod 内部，不同容器之间的通信。因为 Pod 内网容器之间共享一个网络协议栈，所以他们之间的通信，可以通过 loopback 设备完成；</p></li>
+
+<li><p>同节点 Pod 之间的通信，是 cni0 虚拟网桥内部的通信，这相当于一个二层局域网内部设备通信；</p></li>
+
+<li><p>跨节点 Pod 通信略微复杂一点，但也很直观，发送端数据包，通过 cni0 网桥的网关，流转到节点上，然后经过节点 eth0 发送给 VPC 路由。这里不会经过任何封包操作。当 VPC 路由收到数据包时，它通过查询路由表，确认数据包目的地，并把数据包发送给对应的 ECS 节点。而进去节点之后，因为 flanneld 在节点上创建了 cni0 的路由，所以数据包会被发送到目的地的 cni0 局域网，再到目的地 Pod；</p></li>
+
+<li><p>最后一种情况，Pod 与非 Pod 网络的实体通信，需要经过节点上 iptables 规则做 SNAT，而此规则就是 flanneld 依据命令行 --ip-masq 选项做的配置。</p></li>
+</ul>
+
+<h3 id="总结">总结</h3>
+
+<p>以上是阿里云 K8S 集群网络的搭建和通信原理。我们主要通过网络搭建和通信两个角度去分析 K8S 集群网络。其中网络搭建包括初始阶段、集群阶段、节点阶段以及 Pod 阶段，这么分类有助于我们理解这些复杂的配置。而理解了各个配置，集群通信原理就比较容易理解了。</p>
+]]></content>
+            
+            
+            
+            
+            
+                
+                    
+                
+                    
+                
+            
+        </entry>
+    
+        <entry>
+            <title type="text">Flannel 模式网络详解（vxlan）</title>
+            <link rel="alternate" type="text/html" href="https://qsyqian.github.io/post/flannel-pod-communication-analysis/" />
+            <id>https://qsyqian.github.io/post/flannel-pod-communication-analysis/</id>
+            <updated>2019-11-24T19:03:04+08:00</updated>
+            <published>2019-09-17T15:08:18+08:00</published>
+            <author>
+                    <name>qianshuangyang</name>
+                    <uri>https://qsyqian.github.io/</uri>
+                    <email>qsyqian@gmail.com</email>
+                    </author>
+            <rights>[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh)</rights>
+    
+    <summary type="html"><![CDATA[Flannel 模式网络详解（vxlan） 本文主要分析vxlan作为backend的flannel……]]></summary>
+            
+                <content type="html"><![CDATA[
+
+<h2 id="flannel-模式网络详解-vxlan">Flannel 模式网络详解（vxlan）</h2>
+
+<p>本文主要分析vxlan作为backend的flannel，如何实现跨宿主机通信。</p>
+
+<p>相关的flannel原理介绍的博客很多了，我就不分析原理，主要是介绍flannel安装完成之后，宿主机上的网络设备，以及跨宿主机的pod是如何实现一步步通信的。</p>
+
+<h3 id="环境介绍">环境介绍</h3>
+
+<p>本文使用的是三个节点的k8s，版本是1.13 。使用的flannel版本是0.10.0 。flannel配置的backend是vxlan。如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># kubectl get nodes</span>
+NAME              STATUS   ROLES         AGE     VERSION
+sqian-k8s-node1   Ready    master,node   4h53m   v1.13.0
+sqian-k8s-node2   Ready    master,node   4h52m   v1.13.0
+sqian-k8s-node3   Ready    master,node   4h52m   v1.13.0
+<span class="c1"># kubectl exec -it kube-flannel-4rrms  -n kube-system -- /opt/bin/flanneld -version</span>            
+Defaulting container name to kube-flannel.
+Use <span class="s1">&#39;kubectl describe pod/kube-flannel-4rrms -n kube-system&#39;</span> to see all of the containers in this pod.
+v0.10.0</code></pre></td></tr></table>
+</div>
+</div>
+<h3 id="宿主机网络情况">宿主机网络情况</h3>
+
+<p>与flannel相关的几个虚拟网络上设备：</p>
+
+<ul>
+<li>flannel.1：这是一个vxlan设备。也就是耳熟能详的vteh设备，负责网络数据包的封包和解封。</li>
+<li>cni0：是一个linux bridge，用于连接同一个宿主机上的pod。</li>
+<li>vethf12090da@if3：容器内eth0网卡的对端设备，从名字上看，在容器内eth0网卡的编号应为3。</li>
+</ul>
+
+<p>下面再看下上述网络设备的网络信息：</p>
+
+<h4 id="flannel-1">flannel.1：</h4>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ifconfig flannel.1</span>
+flannel.1: <span class="nv">flags</span><span class="o">=</span><span class="m">4163</span>&lt;UP,BROADCAST,RUNNING,MULTICAST&gt;  mtu <span class="m">1450</span>
+        inet <span class="m">172</span>.168.0.0  netmask <span class="m">255</span>.255.255.255  broadcast <span class="m">0</span>.0.0.0
+        inet6 fe80::e010:c0ff:fe12:aa5f  prefixlen <span class="m">64</span>  scopeid 0x20&lt;link&gt;
+        ether e2:10:c0:12:aa:5f  txqueuelen <span class="m">0</span>  <span class="o">(</span>Ethernet<span class="o">)</span>
+        RX packets <span class="m">66</span>  bytes <span class="m">5544</span> <span class="o">(</span><span class="m">5</span>.4 KiB<span class="o">)</span>
+        RX errors <span class="m">0</span>  dropped <span class="m">0</span>  overruns <span class="m">0</span>  frame <span class="m">0</span>
+        TX packets <span class="m">66</span>  bytes <span class="m">7524</span> <span class="o">(</span><span class="m">7</span>.3 KiB<span class="o">)</span>
+        TX errors <span class="m">0</span>  dropped <span class="m">8</span> overruns <span class="m">0</span>  carrier <span class="m">0</span>  collisions <span class="m">0</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>可以看到，flannel.1上有一个IP。（配置的容器的IP段位172.168.0.0/16），由于我们查看的node1上的flannel.1设备，而node1分配的subnet是172.168.0.0/24，该信息可以从node1的yaml文件中看到（这是因为默认的flannel使用的是kube subnet manager）。vxlan网络设备的原理这里不做赘述，感兴趣的可以看另外一篇<a href="https://qsyqian.github.io/post/linux-vxlan-implement/" target="_blank">博客</a>。</p>
+
+<p>查看node1的yaml文件：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># kubectl get node sqian-k8s-node1 -o yaml | grep flannel</span>
+    flannel.alpha.coreos.com/backend-data: <span class="s1">&#39;{&#34;VtepMAC&#34;:&#34;e2:10:c0:12:aa:5f&#34;}&#39;</span>
+    flannel.alpha.coreos.com/backend-type: vxlan
+    flannel.alpha.coreos.com/kube-subnet-manager: <span class="s2">&#34;true&#34;</span>
+    flannel.alpha.coreos.com/public-ip: <span class="m">10</span>.212.36.168</code></pre></td></tr></table>
+</div>
+</div>
+<p>可见flannel在每个node的yaml文件中存储了下述信息：</p>
+
+<ul>
+<li>flannel.alpha.coreos.com/backend-data: vteh设备（flannel.1）的mac地址</li>
+<li>flannel.alpha.coreos.com/backend-type: backend type</li>
+<li>flannel.alpha.coreos.com/kube-subnet-manager: true 采用kube subnet manager</li>
+<li>flannel.alpha.coreos.com/public-ip: 互联IP</li>
+</ul>
+
+<p>有了上述信息，flannel就可以在不同的node之间建立overlay网络，采用的就是vxlan技术。</p>
+
+<p>查看node1上的fdb表：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># bridge fdb  |grep flannel.1</span>
+<span class="m">52</span>:91:cb:aa:d1:bd dev flannel.1 dst <span class="m">10</span>.212.36.170 self permanent
+<span class="m">02</span>:74:40:05:9f:87 dev flannel.1 dst <span class="m">10</span>.212.36.169 self permanent</code></pre></td></tr></table>
+</div>
+</div>
+<p>上述是node1上的fdb表，分别是转发到node2上和node3上。最后的permanent表示该fdb永远不会超时。从这里可以看出，该fdb是通过flannel来维护的，当集群中有新的node加入时，其上的flannel会申请一个新的subnet，该信息会通知到所有的flannel节点上，flannel会在fdb表中追加新的内容。</p>
+
+<p>删除一个节点的话，同理。也是会从该fdb表中修改对应的条目。</p>
+
+<p>查看node1上flannel.1设备的neigh：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip neigh show dev flannel.1</span>
+<span class="m">172</span>.168.1.0 lladdr <span class="m">02</span>:74:40:05:9f:87 PERMANENT
+<span class="m">172</span>.168.2.0 lladdr <span class="m">52</span>:91:cb:aa:d1:bd PERMANENT</code></pre></td></tr></table>
+</div>
+</div>
+<p>其中172.168.1.0是node2上flannel.1的地址。</p>
+
+<p>172.168.2.0是node3上flannel.1的地址。</p>
+
+<h4 id="cni0">cni0</h4>
+
+<p>查看cni0的一些信息：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># brctl show cni0</span>
+bridge name     bridge id               STP enabled     interfaces
+cni0            <span class="m">8000</span>.0a58aca80001       no              veth0c81e625
+                                                        veth3752bd50
+                                                        vethf12090da</code></pre></td></tr></table>
+</div>
+</div>
+<p>可见cni0是一个linux bridge设备，上面挂在了三个容器的网卡对端设备。</p>
+
+<p>查看其ip neigh：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip neigh show dev cni0</span>
+<span class="m">172</span>.168.0.5 lladdr 0a:58:ac:a8:00:05 STALE
+<span class="m">172</span>.168.0.4 lladdr 0a:58:ac:a8:00:04 REACHABLE
+<span class="m">172</span>.168.0.6 lladdr 0a:58:ac:a8:00:06 STALE</code></pre></td></tr></table>
+</div>
+</div>
+<p>上述三个IP就是调度到该节点上的三个pod的IP。</p>
+
+<h4 id="route信息">route信息</h4>
+
+<p>最后来看一下宿主机上的路由信息</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip r</span>
+default via <span class="m">10</span>.212.36.254 dev eth0 <span class="c1">## 默认路由</span>
+<span class="m">10</span>.212.36.0/24 dev eth0  proto kernel  scope link  src <span class="m">10</span>.212.36.168 <span class="c1">## 宿主机网卡的路由</span>
+<span class="m">169</span>.254.0.0/16 dev eth0  scope link  metric <span class="m">1002</span> 
+<span class="m">172</span>.17.0.0/16 dev docker0  proto kernel  scope link  src <span class="m">172</span>.17.0.1 
+<span class="m">172</span>.168.0.0/24 dev cni0  proto kernel  scope link  src <span class="m">172</span>.168.0.1 <span class="c1">## （1）</span>
+<span class="m">172</span>.168.1.0/24 via <span class="m">172</span>.168.1.0 dev flannel.1 onlink <span class="c1">## （2）</span> 
+<span class="m">172</span>.168.2.0/24 via <span class="m">172</span>.168.2.0 dev flannel.1 onlink <span class="c1">## （3）</span></code></pre></td></tr></table>
+</div>
+</div>
+<ul>
+<li>（1）：172.168.0.0/24是node1申请过来的subnet，理论上调度到该节点的pod都会从该C段地址内分配IP。因为所有的pod都是桥接到cni0上的，因此该条路由通过cni0转发给pod。</li>
+<li>（2）：172.168.1.0/24是node2申请过来的subnet，那么如果目的地址是该网段内的流量，则通过flannel.1设备发送给172.168.1.0，172.168.1.0是node2上的flannel.1的地址，flannel.1网卡将数据包vxlan封装之后发送给node2上的flannel.1。node1上的flannel.1是如何找到node2上的flannel.1呢，通过fdb表，上面已经说明。</li>
+<li>（3）同（2）。</li>
+</ul>
+
+<h3 id="容器内网络情况">容器内网络情况</h3>
+
+<p>下面进入容器查看一下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span><span class="lnt">9
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># kubectl exec -it test-75b789cbdc-vdsg4 ip a</span>
+<span class="m">1</span>: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu <span class="m">65536</span> qdisc noqueue state UNKNOWN group default 
+    link/loopback <span class="m">00</span>:00:00:00:00:00 brd <span class="m">00</span>:00:00:00:00:00
+    inet <span class="m">127</span>.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+<span class="m">3</span>: eth0@if12: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu <span class="m">1450</span> qdisc noqueue state UP group default 
+    link/ether 0a:58:ac:a8:00:06 brd ff:ff:ff:ff:ff:ff link-netnsid <span class="m">0</span>
+    inet <span class="m">172</span>.168.0.6/24 scope global eth0
+       valid_lft forever preferred_lft forever</code></pre></td></tr></table>
+</div>
+</div>
+<p>容器内的eth0网卡具有IP地址172.168.0.6，在宿主机申请的IP段（172.168.0.0/24）内。</p>
+
+<p>查看容器内的路由信息：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># kubectl exec -it test-75b789cbdc-vdsg4 ip r</span>
+default via <span class="m">172</span>.168.0.1 dev eth0 
+<span class="m">172</span>.168.0.0/24 dev eth0 proto kernel scope link src <span class="m">172</span>.168.0.6 
+<span class="m">172</span>.168.0.0/16 via <span class="m">172</span>.168.0.1 dev eth0 </code></pre></td></tr></table>
+</div>
+</div>
+<p>默认网关是172.168.0.1，这个地址是在cni0上的，将网桥作为自己的网关。</p>
+
+<p>如果都是172.168.0.0/24段内的通信，则直接走172.168.0.6。</p>
+
+<p>整个pod段（172.168.0.0/16）内的通信，走网关（cni0）地址172.168.0.1 。</p>
+
+<h3 id="总结">总结</h3>
+
+<p>通过上述分析，集群内pod通信就很清晰了：</p>
+
+<ol>
+<li>如果是同一个节点上的pod通信，直接通过linux br转发即可；</li>
+<li>如果是跨节点pod通信，需要通过flannl.1 vxlan设备，封包之后发送给对端宿主机上的flannel.1设备。</li>
+</ol>
+]]></content>
+            
+            
+            
+            
+            
+                
+                    
+                
+                    
+                
+            
+        </entry>
+    
+        <entry>
+            <title type="text">Flannel源码分析</title>
+            <link rel="alternate" type="text/html" href="https://qsyqian.github.io/post/flannel-source-code-analysis/" />
+            <id>https://qsyqian.github.io/post/flannel-source-code-analysis/</id>
+            <updated>2019-11-24T19:03:04+08:00</updated>
+            <published>2019-09-12T16:59:05+08:00</published>
+            <author>
+                    <name>qianshuangyang</name>
+                    <uri>https://qsyqian.github.io/</uri>
+                    <email>qsyqian@gmail.com</email>
+                    </author>
+            <rights>[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh)</rights>
+    
+    <summary type="html"><![CDATA[Flannel源码分析 前言 flannel作为kubernetes的一种网络解决方案，……]]></summary>
+            
+                <content type="html"><![CDATA[
+
+<h1 id="flannel源码分析">Flannel源码分析</h1>
+
+<h2 id="前言">前言</h2>
+
+<p>flannel作为kubernetes的一种网络解决方案，在社区是比较活跃的。支持多种backend。</p>
+
+<p>flannel源码地址在：<a href="https://github.com/coreos/flannel" target="_blank">https://github.com/coreos/flannel</a></p>
+
+<p>从官网上把flannel的代码clone下来，目录结构如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ ll -ah
+total 222K
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:37 ./
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:31 ../
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">351</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 .appveyor.yml
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>   <span class="m">56</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 .dockerignore
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 9月  <span class="m">17</span> <span class="m">09</span>:34 .git/
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 .github/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">147</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 .gitignore
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 9月  <span class="m">17</span> <span class="m">11</span>:22 .idea/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">411</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 .travis.yml
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 backend/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span> <span class="m">3</span>.7K 8月  <span class="m">30</span> <span class="m">18</span>:33 bill-of-materials.json
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>   <span class="m">98</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 bill-of-materials.override.json
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span> <span class="m">3</span>.1K 8月  <span class="m">30</span> <span class="m">18</span>:33 code-of-conduct.md
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span> <span class="m">2</span>.5K 8月  <span class="m">30</span> <span class="m">18</span>:33 CONTRIBUTING.md
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span> <span class="m">1</span>.5K 8月  <span class="m">30</span> <span class="m">18</span>:33 DCO
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 dist/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">427</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 Dockerfile.amd64
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">504</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 Dockerfile.arm
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">494</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 Dockerfile.arm64
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">508</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 Dockerfile.ppc64le
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">504</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 Dockerfile.s390x
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 Documentation/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  11K 8月  <span class="m">30</span> <span class="m">18</span>:33 glide.lock
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span> <span class="m">1</span>.6K 8月  <span class="m">30</span> <span class="m">18</span>:33 glide.yaml
+-rwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>  <span class="m">298</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 header-check.sh*
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 images/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  12K 8月  <span class="m">30</span> <span class="m">18</span>:33 LICENSE
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 logos/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  21K 8月  <span class="m">30</span> <span class="m">18</span>:33 main.go
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>   <span class="m">98</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 MAINTAINERS
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  12K 8月  <span class="m">30</span> <span class="m">18</span>:33 Makefile
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 network/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">131</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 NOTICE
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">212</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 OWNERS
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  75K 8月  <span class="m">30</span> <span class="m">18</span>:33 packet-01.png
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 pkg/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span> <span class="m">4</span>.3K 8月  <span class="m">30</span> <span class="m">18</span>:33 README.md
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 subnet/
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 vendor/
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">30</span> <span class="m">18</span>:33 version/</code></pre></td></tr></table>
+</div>
+</div>
+<p>这里介绍几个主要目录的用途：</p>
+
+<ul>
+<li>backend，flannel支持多种flannel，比如host-gw、vxlan等</li>
+<li>dist，一些脚本和dockerfile文件</li>
+<li>network，对主机的iptables进行操作</li>
+<li>pkg，外部可引用的包</li>
+<li>subnet，flannel中每个host对应一个subnet</li>
+<li>./main.go，flannel程序的入口</li>
+</ul>
+
+<p>经过上述分析，分析flannel的源代码就从./main.go文件入手。</p>
+
+<h2 id="1-参数解析">1.参数解析</h2>
+
+<p>./main.go中结构体CmdLineOpts包含了所有命令行传入的参数解析，具体如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">type</span> <span class="nx">CmdLineOpts</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="nx">etcdEndpoints</span>          <span class="kt">string</span>
+	<span class="nx">etcdPrefix</span>             <span class="kt">string</span>
+	<span class="nx">etcdKeyfile</span>            <span class="kt">string</span>
+	<span class="nx">etcdCertfile</span>           <span class="kt">string</span>
+	<span class="nx">etcdCAFile</span>             <span class="kt">string</span>
+	<span class="nx">etcdUsername</span>           <span class="kt">string</span>
+	<span class="nx">etcdPassword</span>           <span class="kt">string</span>
+    <span class="c1">// 上述的etcd参数，指的是如果采用etcd作为后端subnet存储的话，要提供上述etcd连接参数
+</span><span class="c1"></span>	<span class="nx">help</span>                   <span class="kt">bool</span>
+	<span class="nx">version</span>                <span class="kt">bool</span>
+    <span class="c1">// 帮助和打印出version
+</span><span class="c1"></span>	<span class="nx">kubeSubnetMgr</span>          <span class="kt">bool</span>
+    <span class="c1">// 如果上述kubeSubnetMgr为true，则使用kube-apiserver为subnet的后端存储（其实是将每个node的subnet信息存入到了node的annotations中）
+</span><span class="c1"></span>	<span class="nx">kubeApiUrl</span>             <span class="kt">string</span>
+	<span class="nx">kubeAnnotationPrefix</span>   <span class="kt">string</span>
+	<span class="nx">kubeConfigFile</span>         <span class="kt">string</span>
+    <span class="c1">// 上述三个kube相关的参数标识连接kube-apiserver的必要参数
+</span><span class="c1"></span>	<span class="nx">iface</span>                  <span class="nx">flagSlice</span>
+	<span class="nx">ifaceRegex</span>             <span class="nx">flagSlice</span>
+    <span class="c1">// iface参数，用来作为多节点通信的网卡，不指定的话，flannel会使用默认网卡和其上IP信息
+</span><span class="c1"></span>	<span class="nx">ipMasq</span>                 <span class="kt">bool</span>
+    <span class="c1">// ipMasq （具体意义待定）
+</span><span class="c1"></span>	<span class="nx">subnetFile</span>             <span class="kt">string</span>
+    <span class="c1">// 存储subnet的文件，默认为/run/flannel/subnet.env，其中存储了整个集群的pod subnet段，本机上pod的subnet段等信息
+</span><span class="c1"></span>	<span class="nx">subnetDir</span>              <span class="kt">string</span>
+	<span class="nx">publicIP</span>               <span class="kt">string</span>
+    <span class="c1">// 用来跨节点通信的IP地址，和上述iface参数类似
+</span><span class="c1"></span>	<span class="nx">subnetLeaseRenewMargin</span> <span class="kt">int</span>
+    <span class="c1">// subnet是以lease（租约）的形式存储起来的，到期会自动过期。需要定时续租，改时间表示在lease过期前多少时间续租，单位是min，默认值是60
+</span><span class="c1"></span>	<span class="nx">healthzIP</span>              <span class="kt">string</span>
+	<span class="nx">healthzPort</span>            <span class="kt">int</span>
+    <span class="c1">// 用来健康检查的IP和PORT
+</span><span class="c1"></span>	<span class="nx">charonExecutablePath</span>   <span class="kt">string</span>
+	<span class="nx">charonViciUri</span>          <span class="kt">string</span>
+	<span class="nx">iptablesResyncSeconds</span>  <span class="kt">int</span>
+    <span class="c1">// 同步iptables规则的时间间隔。默认5s同步一次
+</span><span class="c1"></span>	<span class="nx">iptablesForwardRules</span>   <span class="kt">bool</span>
+    <span class="c1">// add default accept rules to FORWARD chain in iptables
+</span><span class="c1"></span>	<span class="nx">netConfPath</span>            <span class="kt">string</span>
+    <span class="c1">// networkConfiguration PATH
+</span><span class="c1"></span><span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>main.go中首先是init函数对命令行传入参数进行赋值，没有赋值的采用默认值。然后进到main()函数中。</p>
+
+<h2 id="2-main函数结构">2.main函数结构</h2>
+
+<p>首先看一下main函数的主要结构，然后分步分析：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt">  1
+</span><span class="lnt">  2
+</span><span class="lnt">  3
+</span><span class="lnt">  4
+</span><span class="lnt">  5
+</span><span class="lnt">  6
+</span><span class="lnt">  7
+</span><span class="lnt">  8
+</span><span class="lnt">  9
+</span><span class="lnt"> 10
+</span><span class="lnt"> 11
+</span><span class="lnt"> 12
+</span><span class="lnt"> 13
+</span><span class="lnt"> 14
+</span><span class="lnt"> 15
+</span><span class="lnt"> 16
+</span><span class="lnt"> 17
+</span><span class="lnt"> 18
+</span><span class="lnt"> 19
+</span><span class="lnt"> 20
+</span><span class="lnt"> 21
+</span><span class="lnt"> 22
+</span><span class="lnt"> 23
+</span><span class="lnt"> 24
+</span><span class="lnt"> 25
+</span><span class="lnt"> 26
+</span><span class="lnt"> 27
+</span><span class="lnt"> 28
+</span><span class="lnt"> 29
+</span><span class="lnt"> 30
+</span><span class="lnt"> 31
+</span><span class="lnt"> 32
+</span><span class="lnt"> 33
+</span><span class="lnt"> 34
+</span><span class="lnt"> 35
+</span><span class="lnt"> 36
+</span><span class="lnt"> 37
+</span><span class="lnt"> 38
+</span><span class="lnt"> 39
+</span><span class="lnt"> 40
+</span><span class="lnt"> 41
+</span><span class="lnt"> 42
+</span><span class="lnt"> 43
+</span><span class="lnt"> 44
+</span><span class="lnt"> 45
+</span><span class="lnt"> 46
+</span><span class="lnt"> 47
+</span><span class="lnt"> 48
+</span><span class="lnt"> 49
+</span><span class="lnt"> 50
+</span><span class="lnt"> 51
+</span><span class="lnt"> 52
+</span><span class="lnt"> 53
+</span><span class="lnt"> 54
+</span><span class="lnt"> 55
+</span><span class="lnt"> 56
+</span><span class="lnt"> 57
+</span><span class="lnt"> 58
+</span><span class="lnt"> 59
+</span><span class="lnt"> 60
+</span><span class="lnt"> 61
+</span><span class="lnt"> 62
+</span><span class="lnt"> 63
+</span><span class="lnt"> 64
+</span><span class="lnt"> 65
+</span><span class="lnt"> 66
+</span><span class="lnt"> 67
+</span><span class="lnt"> 68
+</span><span class="lnt"> 69
+</span><span class="lnt"> 70
+</span><span class="lnt"> 71
+</span><span class="lnt"> 72
+</span><span class="lnt"> 73
+</span><span class="lnt"> 74
+</span><span class="lnt"> 75
+</span><span class="lnt"> 76
+</span><span class="lnt"> 77
+</span><span class="lnt"> 78
+</span><span class="lnt"> 79
+</span><span class="lnt"> 80
+</span><span class="lnt"> 81
+</span><span class="lnt"> 82
+</span><span class="lnt"> 83
+</span><span class="lnt"> 84
+</span><span class="lnt"> 85
+</span><span class="lnt"> 86
+</span><span class="lnt"> 87
+</span><span class="lnt"> 88
+</span><span class="lnt"> 89
+</span><span class="lnt"> 90
+</span><span class="lnt"> 91
+</span><span class="lnt"> 92
+</span><span class="lnt"> 93
+</span><span class="lnt"> 94
+</span><span class="lnt"> 95
+</span><span class="lnt"> 96
+</span><span class="lnt"> 97
+</span><span class="lnt"> 98
+</span><span class="lnt"> 99
+</span><span class="lnt">100
+</span><span class="lnt">101
+</span><span class="lnt">102
+</span><span class="lnt">103
+</span><span class="lnt">104
+</span><span class="lnt">105
+</span><span class="lnt">106
+</span><span class="lnt">107
+</span><span class="lnt">108
+</span><span class="lnt">109
+</span><span class="lnt">110
+</span><span class="lnt">111
+</span><span class="lnt">112
+</span><span class="lnt">113
+</span><span class="lnt">114
+</span><span class="lnt">115
+</span><span class="lnt">116
+</span><span class="lnt">117
+</span><span class="lnt">118
+</span><span class="lnt">119
+</span><span class="lnt">120
+</span><span class="lnt">121
+</span><span class="lnt">122
+</span><span class="lnt">123
+</span><span class="lnt">124
+</span><span class="lnt">125
+</span><span class="lnt">126
+</span><span class="lnt">127
+</span><span class="lnt">128
+</span><span class="lnt">129
+</span><span class="lnt">130
+</span><span class="lnt">131
+</span><span class="lnt">132
+</span><span class="lnt">133
+</span><span class="lnt">134
+</span><span class="lnt">135
+</span><span class="lnt">136
+</span><span class="lnt">137
+</span><span class="lnt">138
+</span><span class="lnt">139
+</span><span class="lnt">140
+</span><span class="lnt">141
+</span><span class="lnt">142
+</span><span class="lnt">143
+</span><span class="lnt">144
+</span><span class="lnt">145
+</span><span class="lnt">146
+</span><span class="lnt">147
+</span><span class="lnt">148
+</span><span class="lnt">149
+</span><span class="lnt">150
+</span><span class="lnt">151
+</span><span class="lnt">152
+</span><span class="lnt">153
+</span><span class="lnt">154
+</span><span class="lnt">155
+</span><span class="lnt">156
+</span><span class="lnt">157
+</span><span class="lnt">158
+</span><span class="lnt">159
+</span><span class="lnt">160
+</span><span class="lnt">161
+</span><span class="lnt">162
+</span><span class="lnt">163
+</span><span class="lnt">164
+</span><span class="lnt">165
+</span><span class="lnt">166
+</span><span class="lnt">167
+</span><span class="lnt">168
+</span><span class="lnt">169
+</span><span class="lnt">170
+</span><span class="lnt">171
+</span><span class="lnt">172
+</span><span class="lnt">173
+</span><span class="lnt">174
+</span><span class="lnt">175
+</span><span class="lnt">176
+</span><span class="lnt">177
+</span><span class="lnt">178
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="c1">// 如果是打印版本，则打印退出
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">version</span> <span class="p">{</span>
+		<span class="nx">fmt</span><span class="p">.</span><span class="nf">Fprintln</span><span class="p">(</span><span class="nx">os</span><span class="p">.</span><span class="nx">Stderr</span><span class="p">,</span> <span class="nx">version</span><span class="p">.</span><span class="nx">Version</span><span class="p">)</span>
+		<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+	<span class="p">}</span>
+
+	<span class="nx">flagutil</span><span class="p">.</span><span class="nf">SetFlagsFromEnv</span><span class="p">(</span><span class="nx">flannelFlags</span><span class="p">,</span> <span class="s">&#34;FLANNELD&#34;</span><span class="p">)</span>
+
+	<span class="c1">// Validate flags
+</span><span class="c1"></span>    <span class="c1">// 验证参数，如果续租时间大于24*60或者小于等于0，则直接报错。
+</span><span class="c1"></span>    <span class="c1">// 因为默认的租约时间为24*60
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">subnetLeaseRenewMargin</span> <span class="o">&gt;=</span> <span class="mi">24</span><span class="o">*</span><span class="mi">60</span> <span class="o">||</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">subnetLeaseRenewMargin</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">&#34;Invalid subnet-lease-renew-margin option, out of acceptable range&#34;</span><span class="p">)</span>
+		<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+	<span class="p">}</span>
+    
+    <span class="c1">// Work out which interface to use
+</span><span class="c1"></span>    <span class="c1">// 找出externalInterface，很简单，如果命令行参数指定了使用哪个网卡，则直接使用，若没指定，则需要自己去找默认的网卡，主要是LookupExtIface这个函数来寻找。这个函数中所调用的ip.GetDefaultGatewayIface()是位于pkg目录下，在自己写程序来获取linux主机默认网卡和ip信息的时候也可以直接引用该函数
+</span><span class="c1"></span>	<span class="kd">var</span> <span class="nx">extIface</span> <span class="o">*</span><span class="nx">backend</span><span class="p">.</span><span class="nx">ExternalInterface</span>
+	<span class="kd">var</span> <span class="nx">err</span> <span class="kt">error</span>
+	<span class="c1">// Check the default interface only if no interfaces are specified
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nx">opts</span><span class="p">.</span><span class="nx">iface</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="nb">len</span><span class="p">(</span><span class="nx">opts</span><span class="p">.</span><span class="nx">ifaceRegex</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">{</span>
+		<span class="nx">extIface</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nf">LookupExtIface</span><span class="p">(</span><span class="s">&#34;&#34;</span><span class="p">,</span> <span class="s">&#34;&#34;</span><span class="p">)</span>
+		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="nx">log</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">&#34;Failed to find any valid interface to use: &#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+			<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+		<span class="p">}</span>
+	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+		<span class="c1">// Check explicitly specified interfaces
+</span><span class="c1"></span>		<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">iface</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">iface</span> <span class="p">{</span>
+			<span class="nx">extIface</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nf">LookupExtIface</span><span class="p">(</span><span class="nx">iface</span><span class="p">,</span> <span class="s">&#34;&#34;</span><span class="p">)</span>
+			<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+				<span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Could not find valid interface matching %s: %s&#34;</span><span class="p">,</span> <span class="nx">iface</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+			<span class="p">}</span>
+
+			<span class="k">if</span> <span class="nx">extIface</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+				<span class="k">break</span>
+			<span class="p">}</span>
+		<span class="p">}</span>
+
+		<span class="c1">// Check interfaces that match any specified regexes
+</span><span class="c1"></span>		<span class="k">if</span> <span class="nx">extIface</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="k">for</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">ifaceRegex</span> <span class="o">:=</span> <span class="k">range</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">ifaceRegex</span> <span class="p">{</span>
+				<span class="nx">extIface</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nf">LookupExtIface</span><span class="p">(</span><span class="s">&#34;&#34;</span><span class="p">,</span> <span class="nx">ifaceRegex</span><span class="p">)</span>
+				<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+					<span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Could not find valid interface matching %s: %s&#34;</span><span class="p">,</span> <span class="nx">ifaceRegex</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+				<span class="p">}</span>
+
+				<span class="k">if</span> <span class="nx">extIface</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+					<span class="k">break</span>
+				<span class="p">}</span>
+			<span class="p">}</span>
+		<span class="p">}</span>
+
+		<span class="k">if</span> <span class="nx">extIface</span> <span class="o">==</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="c1">// Exit if any of the specified interfaces do not match
+</span><span class="c1"></span>			<span class="nx">log</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">&#34;Failed to find interface to use that matches the interfaces and/or regexes provided&#34;</span><span class="p">)</span>
+			<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+    
+    <span class="c1">// 第一步：创建SubnetManager，主要是用来管理subnet的。
+</span><span class="c1"></span>    <span class="nx">sm</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">newSubnetManager</span><span class="p">()</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Error</span><span class="p">(</span><span class="s">&#34;Failed to create SubnetManager: &#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+		<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+	<span class="p">}</span>
+	<span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Created subnet manager: %s&#34;</span><span class="p">,</span> <span class="nx">sm</span><span class="p">.</span><span class="nf">Name</span><span class="p">())</span>
+    
+    <span class="c1">// 下述这段代码是控制程序优雅退出的，首先是创建了sigs channel，类型为os.Signal,buffer为1.
+</span><span class="c1"></span>    <span class="c1">// 此处两个golang的用法，第一个是context，第二个是sync.waitGroup
+</span><span class="c1"></span>    <span class="c1">// Register for SIGINT and SIGTERM
+</span><span class="c1"></span>	<span class="nx">log</span><span class="p">.</span><span class="nf">Info</span><span class="p">(</span><span class="s">&#34;Installing signal handlers&#34;</span><span class="p">)</span>
+	<span class="nx">sigs</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Signal</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+	<span class="nx">signal</span><span class="p">.</span><span class="nf">Notify</span><span class="p">(</span><span class="nx">sigs</span><span class="p">,</span> <span class="nx">os</span><span class="p">.</span><span class="nx">Interrupt</span><span class="p">,</span> <span class="nx">syscall</span><span class="p">.</span><span class="nx">SIGTERM</span><span class="p">)</span>
+
+	<span class="c1">// This is the main context that everything should run in.
+</span><span class="c1"></span>	<span class="c1">// All spawned goroutines should exit when cancel is called on this context.
+</span><span class="c1"></span>	<span class="c1">// Go routines spawned from main.go coordinate using a WaitGroup. This provides a mechanism to allow the shutdownHandler goroutine
+</span><span class="c1"></span>	<span class="c1">// to block until all the goroutines return . If those goroutines spawn other goroutines then they are responsible for
+</span><span class="c1"></span>	<span class="c1">// blocking and returning only when cancel() is called.
+</span><span class="c1"></span>	<span class="c1">// 创建全局的ctx
+</span><span class="c1"></span>    <span class="nx">ctx</span><span class="p">,</span> <span class="nx">cancel</span> <span class="o">:=</span> <span class="nx">context</span><span class="p">.</span><span class="nf">WithCancel</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">())</span>
+	
+    <span class="c1">// 创建任务
+</span><span class="c1"></span>    <span class="nx">wg</span> <span class="o">:=</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span><span class="p">{}</span>
+
+   <span class="c1">// 添加一个任务
+</span><span class="c1"></span>	<span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+        <span class="c1">// shutdownHander中如果监听到系统信号，则调用cancel函数，那么所有的调用都将终止
+</span><span class="c1"></span>		<span class="nf">shutdownHandler</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">sigs</span><span class="p">,</span> <span class="nx">cancel</span><span class="p">)</span>
+		<span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+	<span class="p">}()</span>
+    
+    <span class="c1">// 如果定义了健康检查端口，则要启动一个http服务监听该端口
+</span><span class="c1"></span>    <span class="k">if</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">healthzPort</span> <span class="p">&gt;</span> <span class="mi">0</span> <span class="p">{</span>
+		<span class="c1">// It&#39;s not super easy to shutdown the HTTP server so don&#39;t attempt to stop it cleanly
+</span><span class="c1"></span>		<span class="k">go</span> <span class="nf">mustRunHealthz</span><span class="p">()</span>
+	<span class="p">}</span>
+    
+    <span class="c1">// 第二步：创建backend，并且通过该backend来注册subnet
+</span><span class="c1"></span>    <span class="c1">// Create a backend manager then use it to create the backend and register the network with it.
+</span><span class="c1"></span>	<span class="nx">bm</span> <span class="o">:=</span> <span class="nx">backend</span><span class="p">.</span><span class="nf">NewManager</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">sm</span><span class="p">,</span> <span class="nx">extIface</span><span class="p">)</span>
+	<span class="nx">be</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">bm</span><span class="p">.</span><span class="nf">GetBackend</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">BackendType</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;Error fetching backend: %s&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+		<span class="nf">cancel</span><span class="p">()</span>
+		<span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+		<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+	<span class="p">}</span>
+
+    <span class="c1">// 注册subnet
+</span><span class="c1"></span>	<span class="nx">bn</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">be</span><span class="p">.</span><span class="nf">RegisterNetwork</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">wg</span><span class="p">,</span> <span class="nx">config</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;Error registering network: %s&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+		<span class="nf">cancel</span><span class="p">()</span>
+		<span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+		<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+	<span class="p">}</span>
+    
+    <span class="c1">// 第三步：如果指定了ipMasq，则定期同步iptables
+</span><span class="c1"></span>    <span class="c1">// Set up ipMasq if needed
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">ipMasq</span> <span class="p">{</span>
+		<span class="k">if</span> <span class="nx">err</span> <span class="p">=</span> <span class="nf">recycleIPTables</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">Network</span><span class="p">,</span> <span class="nx">bn</span><span class="p">.</span><span class="nf">Lease</span><span class="p">());</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="nx">log</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;Failed to recycle IPTables rules, %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+			<span class="nf">cancel</span><span class="p">()</span>
+			<span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+			<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+		<span class="p">}</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Setting up masking rules&#34;</span><span class="p">)</span>
+		<span class="k">go</span> <span class="nx">network</span><span class="p">.</span><span class="nf">SetupAndEnsureIPTables</span><span class="p">(</span><span class="nx">network</span><span class="p">.</span><span class="nf">MasqRules</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">Network</span><span class="p">,</span> <span class="nx">bn</span><span class="p">.</span><span class="nf">Lease</span><span class="p">()),</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">iptablesResyncSeconds</span><span class="p">)</span>
+	<span class="p">}</span>
+    
+    <span class="c1">// 第四步：iptablesForwardRules指定的话，定期去同步指定的iptables
+</span><span class="c1"></span>    <span class="c1">// Always enables forwarding rules. This is needed for Docker versions &gt;1.13 (https://docs.docker.com/engine/userguide/networking/default_network/container-communication/#container-communication-between-hosts)
+</span><span class="c1"></span>	<span class="c1">// In Docker 1.12 and earlier, the default FORWARD chain policy was ACCEPT.
+</span><span class="c1"></span>	<span class="c1">// In Docker 1.13 and later, Docker sets the default policy of the FORWARD chain to DROP.
+</span><span class="c1"></span>	<span class="k">if</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">iptablesForwardRules</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Changing default FORWARD chain policy to ACCEPT&#34;</span><span class="p">)</span>
+		<span class="k">go</span> <span class="nx">network</span><span class="p">.</span><span class="nf">SetupAndEnsureIPTables</span><span class="p">(</span><span class="nx">network</span><span class="p">.</span><span class="nf">ForwardRules</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">Network</span><span class="p">.</span><span class="nf">String</span><span class="p">()),</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">iptablesResyncSeconds</span><span class="p">)</span>
+	<span class="p">}</span>
+    
+    <span class="c1">// 第五步：写入subnet file
+</span><span class="c1"></span>    <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">WriteSubnetFile</span><span class="p">(</span><span class="nx">opts</span><span class="p">.</span><span class="nx">subnetFile</span><span class="p">,</span> <span class="nx">config</span><span class="p">.</span><span class="nx">Network</span><span class="p">,</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">ipMasq</span><span class="p">,</span> <span class="nx">bn</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="c1">// Continue, even though it failed.
+</span><span class="c1"></span>		<span class="nx">log</span><span class="p">.</span><span class="nf">Warningf</span><span class="p">(</span><span class="s">&#34;Failed to write subnet file: %s&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+		<span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Wrote subnet file to %s&#34;</span><span class="p">,</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">subnetFile</span><span class="p">)</span>
+	<span class="p">}</span>
+    
+    <span class="c1">// 第六步：backend run起来
+</span><span class="c1"></span>    <span class="c1">// Start &#34;Running&#34; the backend network. This will block until the context is done so run in another goroutine.
+</span><span class="c1"></span>	<span class="nx">log</span><span class="p">.</span><span class="nf">Info</span><span class="p">(</span><span class="s">&#34;Running backend.&#34;</span><span class="p">)</span>
+	<span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+	<span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+		<span class="nx">bn</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span>
+		<span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+	<span class="p">}()</span>
+    
+    <span class="c1">// 第七步：kube subnet mgr监听subnet lease
+</span><span class="c1"></span>    <span class="c1">// Kube subnet mgr doesn&#39;t lease the subnet for this node - it just uses the podCidr that&#39;s already assigned.
+</span><span class="c1"></span>	<span class="k">if</span> <span class="p">!</span><span class="nx">opts</span><span class="p">.</span><span class="nx">kubeSubnetMgr</span> <span class="p">{</span>
+		<span class="nx">err</span> <span class="p">=</span> <span class="nf">MonitorLease</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">sm</span><span class="p">,</span> <span class="nx">bn</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">wg</span><span class="p">)</span>
+		<span class="k">if</span> <span class="nx">err</span> <span class="o">==</span> <span class="nx">errInterrupted</span> <span class="p">{</span>
+			<span class="c1">// The lease was &#34;revoked&#34; - shut everything down
+</span><span class="c1"></span>			<span class="nf">cancel</span><span class="p">()</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+
+    
+    <span class="nx">log</span><span class="p">.</span><span class="nf">Info</span><span class="p">(</span><span class="s">&#34;Waiting for all goroutines to exit&#34;</span><span class="p">)</span>
+	<span class="c1">// Block waiting for all the goroutines to finish.
+</span><span class="c1"></span>	<span class="nx">wg</span><span class="p">.</span><span class="nf">Wait</span><span class="p">()</span>
+	<span class="nx">log</span><span class="p">.</span><span class="nf">Info</span><span class="p">(</span><span class="s">&#34;Exiting cleanly...&#34;</span><span class="p">)</span>
+	<span class="nx">os</span><span class="p">.</span><span class="nf">Exit</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    </code></pre></td></tr></table>
+</div>
+</div>
+<p>上述main函数中列出了7个主要的步骤，下面依次分析。</p>
+
+<h2 id="3-第一步-创建subnetmanager">3.第一步：创建SubnetManager</h2>
+
+<p>main.go中的newSubnetManager函数：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">newSubnetManager</span><span class="p">()</span> <span class="p">(</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">Manager</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+	<span class="k">if</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">kubeSubnetMgr</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="nx">kube</span><span class="p">.</span><span class="nf">NewSubnetManager</span><span class="p">(</span><span class="nx">opts</span><span class="p">.</span><span class="nx">kubeApiUrl</span><span class="p">,</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">kubeConfigFile</span><span class="p">,</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">kubeAnnotationPrefix</span><span class="p">,</span> <span class="nx">opts</span><span class="p">.</span><span class="nx">netConfPath</span><span class="p">)</span>
+	<span class="p">}</span>
+
+	<span class="nx">cfg</span> <span class="o">:=</span> <span class="o">&amp;</span><span class="nx">etcdv2</span><span class="p">.</span><span class="nx">EtcdConfig</span><span class="p">{</span>
+		<span class="nx">Endpoints</span><span class="p">:</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">Split</span><span class="p">(</span><span class="nx">opts</span><span class="p">.</span><span class="nx">etcdEndpoints</span><span class="p">,</span> <span class="s">&#34;,&#34;</span><span class="p">),</span>
+		<span class="nx">Keyfile</span><span class="p">:</span>   <span class="nx">opts</span><span class="p">.</span><span class="nx">etcdKeyfile</span><span class="p">,</span>
+		<span class="nx">Certfile</span><span class="p">:</span>  <span class="nx">opts</span><span class="p">.</span><span class="nx">etcdCertfile</span><span class="p">,</span>
+		<span class="nx">CAFile</span><span class="p">:</span>    <span class="nx">opts</span><span class="p">.</span><span class="nx">etcdCAFile</span><span class="p">,</span>
+		<span class="nx">Prefix</span><span class="p">:</span>    <span class="nx">opts</span><span class="p">.</span><span class="nx">etcdPrefix</span><span class="p">,</span>
+		<span class="nx">Username</span><span class="p">:</span>  <span class="nx">opts</span><span class="p">.</span><span class="nx">etcdUsername</span><span class="p">,</span>
+		<span class="nx">Password</span><span class="p">:</span>  <span class="nx">opts</span><span class="p">.</span><span class="nx">etcdPassword</span><span class="p">,</span>
+	<span class="p">}</span>
+
+	<span class="c1">// Attempt to renew the lease for the subnet specified in the subnetFile
+</span><span class="c1"></span>	<span class="nx">prevSubnet</span> <span class="o">:=</span> <span class="nf">ReadCIDRFromSubnetFile</span><span class="p">(</span><span class="nx">opts</span><span class="p">.</span><span class="nx">subnetFile</span><span class="p">,</span> <span class="s">&#34;FLANNEL_SUBNET&#34;</span><span class="p">)</span>
+
+	<span class="k">return</span> <span class="nx">etcdv2</span><span class="p">.</span><span class="nf">NewLocalManager</span><span class="p">(</span><span class="nx">cfg</span><span class="p">,</span> <span class="nx">prevSubnet</span><span class="p">)</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>如果使用了kubeSubnetMgr，则调用kube.NewSubnetManager，否则调用etcdv2。这一点需要说明的是etcd发展到现在支持不同的版本，v2和v3，且v3版本具有很多优势。flannel仓库中v2版本相关的代码提交是2 years之前，因此可见目前flannel实际上只支持kube-apiserver作为后端存储，也是默认的存储方式。</p>
+
+<p>./flannel/subnet/kube/kube.go：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">type</span> <span class="nx">kubeSubnetManager</span> <span class="kd">struct</span> <span class="p">{</span>
+	<span class="c1">// 往node的yaml文件中添加的annotations
+</span><span class="c1"></span>	<span class="nx">annotations</span>    <span class="nx">annotations</span>
+	<span class="c1">// 与kube-apiserver交互的client
+</span><span class="c1"></span>	<span class="nx">client</span>         <span class="nx">clientset</span><span class="p">.</span><span class="nx">Interface</span>
+    <span class="c1">// 运行在哪个node上
+</span><span class="c1"></span>	<span class="nx">nodeName</span>       <span class="kt">string</span>
+    <span class="c1">// node lister
+</span><span class="c1"></span>	<span class="nx">nodeStore</span>      <span class="nx">listers</span><span class="p">.</span><span class="nx">NodeLister</span>
+    <span class="c1">// node controller
+</span><span class="c1"></span>	<span class="nx">nodeController</span> <span class="nx">cache</span><span class="p">.</span><span class="nx">Controller</span>
+	<span class="nx">subnetConf</span>     <span class="o">*</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">Config</span>
+	<span class="nx">events</span>         <span class="kd">chan</span> <span class="nx">subnet</span><span class="p">.</span><span class="nx">Event</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>下面进入flannel/subnet/kube/kube.go里的NewSubnetManager函数中，看看都干了啥：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span><span class="lnt">59
+</span><span class="lnt">60
+</span><span class="lnt">61
+</span><span class="lnt">62
+</span><span class="lnt">63
+</span><span class="lnt">64
+</span><span class="lnt">65
+</span><span class="lnt">66
+</span><span class="lnt">67
+</span><span class="lnt">68
+</span><span class="lnt">69
+</span><span class="lnt">70
+</span><span class="lnt">71
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">NewSubnetManager</span><span class="p">(</span><span class="nx">apiUrl</span><span class="p">,</span> <span class="nx">kubeconfig</span><span class="p">,</span> <span class="nx">prefix</span><span class="p">,</span> <span class="nx">netConfPath</span> <span class="kt">string</span><span class="p">)</span> <span class="p">(</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">Manager</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+	<span class="c1">//先看看入参函数：kube-apiserver的地址，kubeconfig的地址，prefix是给node打anno的时候前缀，netConfPath是配置存储目录，实际上安装完成之后，是通过configmap的形式挂载到/etc/kube-flannel/net-conf.json里的
+</span><span class="c1"></span>	<span class="kd">var</span> <span class="nx">cfg</span> <span class="o">*</span><span class="nx">rest</span><span class="p">.</span><span class="nx">Config</span>
+	<span class="kd">var</span> <span class="nx">err</span> <span class="kt">error</span>
+	<span class="c1">// Try to build kubernetes config from a master url or a kubeconfig filepath. If neither masterUrl
+</span><span class="c1"></span>	<span class="c1">// or kubeconfigPath are passed in we fall back to inClusterConfig. If inClusterConfig fails,
+</span><span class="c1"></span>	<span class="c1">// we fallback to the default config.
+</span><span class="c1"></span>	<span class="nx">cfg</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nx">clientcmd</span><span class="p">.</span><span class="nf">BuildConfigFromFlags</span><span class="p">(</span><span class="nx">apiUrl</span><span class="p">,</span> <span class="nx">kubeconfig</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;fail to create kubernetes config: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+
+	<span class="nx">c</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">clientset</span><span class="p">.</span><span class="nf">NewForConfig</span><span class="p">(</span><span class="nx">cfg</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;unable to initialize client: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+    <span class="c1">// 上述是通过提供的配置，创建clientset，用来连接kube-apiserver
+</span><span class="c1"></span>
+	<span class="c1">// The kube subnet mgr needs to know the k8s node name that it&#39;s running on so it can annotate it.
+</span><span class="c1"></span>	<span class="c1">// If we&#39;re running as a pod then the POD_NAME and POD_NAMESPACE will be populated and can be used to find the node
+</span><span class="c1"></span>	<span class="c1">// name. Otherwise, the environment variable NODE_NAME can be passed in.
+</span><span class="c1"></span>	<span class="c1">// 获取nodename
+</span><span class="c1"></span>    <span class="nx">nodeName</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;NODE_NAME&#34;</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">nodeName</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
+		<span class="nx">podName</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;POD_NAME&#34;</span><span class="p">)</span>
+		<span class="nx">podNamespace</span> <span class="o">:=</span> <span class="nx">os</span><span class="p">.</span><span class="nf">Getenv</span><span class="p">(</span><span class="s">&#34;POD_NAMESPACE&#34;</span><span class="p">)</span>
+		<span class="k">if</span> <span class="nx">podName</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="o">||</span> <span class="nx">podNamespace</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
+			<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;env variables POD_NAME and POD_NAMESPACE must be set&#34;</span><span class="p">)</span>
+		<span class="p">}</span>
+
+		<span class="nx">pod</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nf">Pods</span><span class="p">(</span><span class="nx">podNamespace</span><span class="p">).</span><span class="nf">Get</span><span class="p">(</span><span class="nx">podName</span><span class="p">,</span> <span class="nx">metav1</span><span class="p">.</span><span class="nx">GetOptions</span><span class="p">{})</span>
+		<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+			<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;error retrieving pod spec for &#39;%s/%s&#39;: %v&#34;</span><span class="p">,</span> <span class="nx">podNamespace</span><span class="p">,</span> <span class="nx">podName</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+		<span class="p">}</span>
+		<span class="nx">nodeName</span> <span class="p">=</span> <span class="nx">pod</span><span class="p">.</span><span class="nx">Spec</span><span class="p">.</span><span class="nx">NodeName</span>
+		<span class="k">if</span> <span class="nx">nodeName</span> <span class="o">==</span> <span class="s">&#34;&#34;</span> <span class="p">{</span>
+			<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;node name not present in pod spec &#39;%s/%s&#39;&#34;</span><span class="p">,</span> <span class="nx">podNamespace</span><span class="p">,</span> <span class="nx">podName</span><span class="p">)</span>
+		<span class="p">}</span>
+	<span class="p">}</span>
+
+    <span class="c1">// 读取网络配置文件
+</span><span class="c1"></span>	<span class="nx">netConf</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">ioutil</span><span class="p">.</span><span class="nf">ReadFile</span><span class="p">(</span><span class="nx">netConfPath</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;failed to read net conf: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+
+    <span class="c1">// 解析网络配置
+</span><span class="c1"></span>	<span class="nx">sc</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">subnet</span><span class="p">.</span><span class="nf">ParseConfig</span><span class="p">(</span><span class="nb">string</span><span class="p">(</span><span class="nx">netConf</span><span class="p">))</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;error parsing subnet config: %s&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+
+    <span class="c1">// 初始化并运行subnetManager，传入的参数有clientset，网络配置，nodename，anno前缀，具体的new和Run函数下文分析
+</span><span class="c1"></span>	<span class="nx">sm</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">newKubeSubnetManager</span><span class="p">(</span><span class="nx">c</span><span class="p">,</span> <span class="nx">sc</span><span class="p">,</span> <span class="nx">nodeName</span><span class="p">,</span> <span class="nx">prefix</span><span class="p">)</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;error creating network manager: %s&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+	<span class="k">go</span> <span class="nx">sm</span><span class="p">.</span><span class="nf">Run</span><span class="p">(</span><span class="nx">context</span><span class="p">.</span><span class="nf">Background</span><span class="p">())</span>
+
+    <span class="c1">// 下面确保hasSynced
+</span><span class="c1"></span>	<span class="nx">glog</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Waiting %s for node controller to sync&#34;</span><span class="p">,</span> <span class="nx">nodeControllerSyncTimeout</span><span class="p">)</span>
+	<span class="nx">err</span> <span class="p">=</span> <span class="nx">wait</span><span class="p">.</span><span class="nf">Poll</span><span class="p">(</span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">,</span> <span class="nx">nodeControllerSyncTimeout</span><span class="p">,</span> <span class="kd">func</span><span class="p">()</span> <span class="p">(</span><span class="kt">bool</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="nx">sm</span><span class="p">.</span><span class="nx">nodeController</span><span class="p">.</span><span class="nf">HasSynced</span><span class="p">(),</span> <span class="kc">nil</span>
+	<span class="p">})</span>
+	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+		<span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;error waiting for nodeController to sync state: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+	<span class="p">}</span>
+	<span class="nx">glog</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Node controller sync successful&#34;</span><span class="p">)</span>
+
+	<span class="k">return</span> <span class="nx">sm</span><span class="p">,</span> <span class="kc">nil</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>下面去看看如何newKubeSubnetManager和让其Run起来的。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">newKubeSubnetManager</span><span class="p">(</span><span class="nx">c</span> <span class="nx">clientset</span><span class="p">.</span><span class="nx">Interface</span><span class="p">,</span> <span class="nx">sc</span> <span class="o">*</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">Config</span><span class="p">,</span> <span class="nx">nodeName</span><span class="p">,</span> <span class="nx">prefix</span> <span class="kt">string</span><span class="p">)</span> <span class="p">(</span><span class="o">*</span><span class="nx">kubeSubnetManager</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+   <span class="kd">var</span> <span class="nx">err</span> <span class="kt">error</span>
+   <span class="kd">var</span> <span class="nx">ksm</span> <span class="nx">kubeSubnetManager</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">annotations</span><span class="p">,</span> <span class="nx">err</span> <span class="p">=</span> <span class="nf">newAnnotations</span><span class="p">(</span><span class="nx">prefix</span><span class="p">)</span>
+   <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+   <span class="p">}</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">client</span> <span class="p">=</span> <span class="nx">c</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">nodeName</span> <span class="p">=</span> <span class="nx">nodeName</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">subnetConf</span> <span class="p">=</span> <span class="nx">sc</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">events</span> <span class="p">=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">subnet</span><span class="p">.</span><span class="nx">Event</span><span class="p">,</span> <span class="mi">5000</span><span class="p">)</span>
+   <span class="nx">indexer</span><span class="p">,</span> <span class="nx">controller</span> <span class="o">:=</span> <span class="nx">cache</span><span class="p">.</span><span class="nf">NewIndexerInformer</span><span class="p">(</span>
+      <span class="o">&amp;</span><span class="nx">cache</span><span class="p">.</span><span class="nx">ListWatch</span><span class="p">{</span>
+         <span class="nx">ListFunc</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">options</span> <span class="nx">metav1</span><span class="p">.</span><span class="nx">ListOptions</span><span class="p">)</span> <span class="p">(</span><span class="nx">runtime</span><span class="p">.</span><span class="nx">Object</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nx">ksm</span><span class="p">.</span><span class="nx">client</span><span class="p">.</span><span class="nf">CoreV1</span><span class="p">().</span><span class="nf">Nodes</span><span class="p">().</span><span class="nf">List</span><span class="p">(</span><span class="nx">options</span><span class="p">)</span>
+         <span class="p">},</span>
+         <span class="nx">WatchFunc</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">options</span> <span class="nx">metav1</span><span class="p">.</span><span class="nx">ListOptions</span><span class="p">)</span> <span class="p">(</span><span class="nx">watch</span><span class="p">.</span><span class="nx">Interface</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nx">ksm</span><span class="p">.</span><span class="nx">client</span><span class="p">.</span><span class="nf">CoreV1</span><span class="p">().</span><span class="nf">Nodes</span><span class="p">().</span><span class="nf">Watch</span><span class="p">(</span><span class="nx">options</span><span class="p">)</span>
+         <span class="p">},</span>
+      <span class="p">},</span>
+      <span class="o">&amp;</span><span class="nx">v1</span><span class="p">.</span><span class="nx">Node</span><span class="p">{},</span>
+      <span class="nx">resyncPeriod</span><span class="p">,</span>
+      <span class="nx">cache</span><span class="p">.</span><span class="nx">ResourceEventHandlerFuncs</span><span class="p">{</span>
+         <span class="nx">AddFunc</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">obj</span> <span class="kd">interface</span><span class="p">{})</span> <span class="p">{</span>
+            <span class="nx">ksm</span><span class="p">.</span><span class="nf">handleAddLeaseEvent</span><span class="p">(</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">EventAdded</span><span class="p">,</span> <span class="nx">obj</span><span class="p">)</span>
+         <span class="p">},</span>
+         <span class="nx">UpdateFunc</span><span class="p">:</span> <span class="nx">ksm</span><span class="p">.</span><span class="nx">handleUpdateLeaseEvent</span><span class="p">,</span>
+         <span class="nx">DeleteFunc</span><span class="p">:</span> <span class="kd">func</span><span class="p">(</span><span class="nx">obj</span> <span class="kd">interface</span><span class="p">{})</span> <span class="p">{</span>
+            <span class="nx">node</span><span class="p">,</span> <span class="nx">isNode</span> <span class="o">:=</span> <span class="nx">obj</span><span class="p">.(</span><span class="o">*</span><span class="nx">v1</span><span class="p">.</span><span class="nx">Node</span><span class="p">)</span>
+            <span class="c1">// We can get DeletedFinalStateUnknown instead of *api.Node here and we need to handle that correctly.
+</span><span class="c1"></span>            <span class="k">if</span> <span class="p">!</span><span class="nx">isNode</span> <span class="p">{</span>
+               <span class="nx">deletedState</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="nx">obj</span><span class="p">.(</span><span class="nx">cache</span><span class="p">.</span><span class="nx">DeletedFinalStateUnknown</span><span class="p">)</span>
+               <span class="k">if</span> <span class="p">!</span><span class="nx">ok</span> <span class="p">{</span>
+                  <span class="nx">glog</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Error received unexpected object: %v&#34;</span><span class="p">,</span> <span class="nx">obj</span><span class="p">)</span>
+                  <span class="k">return</span>
+               <span class="p">}</span>
+               <span class="nx">node</span><span class="p">,</span> <span class="nx">ok</span> <span class="p">=</span> <span class="nx">deletedState</span><span class="p">.</span><span class="nx">Obj</span><span class="p">.(</span><span class="o">*</span><span class="nx">v1</span><span class="p">.</span><span class="nx">Node</span><span class="p">)</span>
+               <span class="k">if</span> <span class="p">!</span><span class="nx">ok</span> <span class="p">{</span>
+                  <span class="nx">glog</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;Error deletedFinalStateUnknown contained non-Node object: %v&#34;</span><span class="p">,</span> <span class="nx">deletedState</span><span class="p">.</span><span class="nx">Obj</span><span class="p">)</span>
+                  <span class="k">return</span>
+               <span class="p">}</span>
+               <span class="nx">obj</span> <span class="p">=</span> <span class="nx">node</span>
+            <span class="p">}</span>
+            <span class="nx">ksm</span><span class="p">.</span><span class="nf">handleAddLeaseEvent</span><span class="p">(</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">EventRemoved</span><span class="p">,</span> <span class="nx">obj</span><span class="p">)</span>
+         <span class="p">},</span>
+      <span class="p">},</span>
+      <span class="nx">cache</span><span class="p">.</span><span class="nx">Indexers</span><span class="p">{</span><span class="nx">cache</span><span class="p">.</span><span class="nx">NamespaceIndex</span><span class="p">:</span> <span class="nx">cache</span><span class="p">.</span><span class="nx">MetaNamespaceIndexFunc</span><span class="p">},</span>
+   <span class="p">)</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">nodeController</span> <span class="p">=</span> <span class="nx">controller</span>
+   <span class="nx">ksm</span><span class="p">.</span><span class="nx">nodeStore</span> <span class="p">=</span> <span class="nx">listers</span><span class="p">.</span><span class="nf">NewNodeLister</span><span class="p">(</span><span class="nx">indexer</span><span class="p">)</span>
+   <span class="k">return</span> <span class="o">&amp;</span><span class="nx">ksm</span><span class="p">,</span> <span class="kc">nil</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>总结一下上述函数都干了啥：</p>
+
+<ul>
+<li>初始化kubeSubnetManager</li>
+<li>ksm主要是对集群中node进行监听，因为flannel是根据node来划分网段的</li>
+<li>根据监听到的node的事件，放入到ksm的events channel中</li>
+</ul>
+
+<p>此外，ksm.Run函数就是运行起来。</p>
+
+<h2 id="4-第二步-创建backend">4.第二步：创建backend</h2>
+
+<p>首先看backend/manager.go中的NewManager函数</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="nf">NewManager</span><span class="p">(</span><span class="nx">ctx</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span> <span class="nx">sm</span> <span class="nx">subnet</span><span class="p">.</span><span class="nx">Manager</span><span class="p">,</span> <span class="nx">extIface</span> <span class="o">*</span><span class="nx">ExternalInterface</span><span class="p">)</span> <span class="nx">Manager</span> <span class="p">{</span>
+   <span class="k">return</span> <span class="o">&amp;</span><span class="nx">manager</span><span class="p">{</span>
+      <span class="nx">ctx</span><span class="p">:</span>      <span class="nx">ctx</span><span class="p">,</span>
+      <span class="nx">sm</span><span class="p">:</span>       <span class="nx">sm</span><span class="p">,</span>
+      <span class="nx">extIface</span><span class="p">:</span> <span class="nx">extIface</span><span class="p">,</span>
+      <span class="nx">active</span><span class="p">:</span>   <span class="nb">make</span><span class="p">(</span><span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="nx">Backend</span><span class="p">),</span>
+   <span class="p">}</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>只是返回了一个manager对象：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">type</span> <span class="nx">manager</span> <span class="kd">struct</span> <span class="p">{</span>
+   <span class="nx">ctx</span>      <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span>
+    <span class="c1">// 上文创建好的ksm
+</span><span class="c1"></span>   <span class="nx">sm</span>       <span class="nx">subnet</span><span class="p">.</span><span class="nx">Manager</span>
+    <span class="c1">// 用来与外界通信的interface
+</span><span class="c1"></span>   <span class="nx">extIface</span> <span class="o">*</span><span class="nx">ExternalInterface</span>
+    <span class="c1">// 互斥锁
+</span><span class="c1"></span>   <span class="nx">mux</span>      <span class="nx">sync</span><span class="p">.</span><span class="nx">Mutex</span>
+   <span class="nx">active</span>   <span class="kd">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="nx">Backend</span>
+   <span class="nx">wg</span>       <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>下面看bm.GetBackend(config.BackendType)函数：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">bm</span> <span class="o">*</span><span class="nx">manager</span><span class="p">)</span> <span class="nf">GetBackend</span><span class="p">(</span><span class="nx">backendType</span> <span class="kt">string</span><span class="p">)</span> <span class="p">(</span><span class="nx">Backend</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">//传入的参数是config的BackendType，此配置项是通过configmap写入到flannel的pod中的，因此是一个固定的值，比如vxlan
+</span><span class="c1"></span>   <span class="nx">bm</span><span class="p">.</span><span class="nx">mux</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+   <span class="k">defer</span> <span class="nx">bm</span><span class="p">.</span><span class="nx">mux</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+
+   <span class="nx">betype</span> <span class="o">:=</span> <span class="nx">strings</span><span class="p">.</span><span class="nf">ToLower</span><span class="p">(</span><span class="nx">backendType</span><span class="p">)</span>
+   <span class="c1">// see if one is already running
+</span><span class="c1"></span>   <span class="k">if</span> <span class="nx">be</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="nx">bm</span><span class="p">.</span><span class="nx">active</span><span class="p">[</span><span class="nx">betype</span><span class="p">];</span> <span class="nx">ok</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="nx">be</span><span class="p">,</span> <span class="kc">nil</span>
+   <span class="p">}</span>
+
+   <span class="c1">// first request, need to create and run it
+</span><span class="c1"></span>   <span class="nx">befunc</span><span class="p">,</span> <span class="nx">ok</span> <span class="o">:=</span> <span class="nx">constructors</span><span class="p">[</span><span class="nx">betype</span><span class="p">]</span>
+   <span class="k">if</span> <span class="p">!</span><span class="nx">ok</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;unknown backend type: %v&#34;</span><span class="p">,</span> <span class="nx">betype</span><span class="p">)</span>
+   <span class="p">}</span>
+
+   <span class="nx">be</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">befunc</span><span class="p">(</span><span class="nx">bm</span><span class="p">.</span><span class="nx">sm</span><span class="p">,</span> <span class="nx">bm</span><span class="p">.</span><span class="nx">extIface</span><span class="p">)</span>
+   <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+   <span class="p">}</span>
+   <span class="nx">bm</span><span class="p">.</span><span class="nx">active</span><span class="p">[</span><span class="nx">betype</span><span class="p">]</span> <span class="p">=</span> <span class="nx">be</span>
+
+   <span class="nx">bm</span><span class="p">.</span><span class="nx">wg</span><span class="p">.</span><span class="nf">Add</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+   <span class="k">go</span> <span class="kd">func</span><span class="p">()</span> <span class="p">{</span>
+      <span class="o">&lt;-</span><span class="nx">bm</span><span class="p">.</span><span class="nx">ctx</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+
+      <span class="c1">// TODO(eyakubovich): this obviosly introduces a race.
+</span><span class="c1"></span>      <span class="c1">// GetBackend() could get called while we are here.
+</span><span class="c1"></span>      <span class="c1">// Currently though, all backends&#39; Run exit only
+</span><span class="c1"></span>      <span class="c1">// on shutdown
+</span><span class="c1"></span>
+      <span class="nx">bm</span><span class="p">.</span><span class="nx">mux</span><span class="p">.</span><span class="nf">Lock</span><span class="p">()</span>
+      <span class="nb">delete</span><span class="p">(</span><span class="nx">bm</span><span class="p">.</span><span class="nx">active</span><span class="p">,</span> <span class="nx">betype</span><span class="p">)</span>
+      <span class="nx">bm</span><span class="p">.</span><span class="nx">mux</span><span class="p">.</span><span class="nf">Unlock</span><span class="p">()</span>
+
+      <span class="nx">bm</span><span class="p">.</span><span class="nx">wg</span><span class="p">.</span><span class="nf">Done</span><span class="p">()</span>
+   <span class="p">}()</span>
+
+   <span class="k">return</span> <span class="nx">be</span><span class="p">,</span> <span class="kc">nil</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>main.go的289行bn, err := be.RegisterNetwork(ctx, wg, config)，实际上调用的是具体的backend的Register，比如配置了vxlan就调用vxlan的register：</p>
+
+<p>flannel/backend/vxlan/vxlan.go:</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span><span class="lnt">29
+</span><span class="lnt">30
+</span><span class="lnt">31
+</span><span class="lnt">32
+</span><span class="lnt">33
+</span><span class="lnt">34
+</span><span class="lnt">35
+</span><span class="lnt">36
+</span><span class="lnt">37
+</span><span class="lnt">38
+</span><span class="lnt">39
+</span><span class="lnt">40
+</span><span class="lnt">41
+</span><span class="lnt">42
+</span><span class="lnt">43
+</span><span class="lnt">44
+</span><span class="lnt">45
+</span><span class="lnt">46
+</span><span class="lnt">47
+</span><span class="lnt">48
+</span><span class="lnt">49
+</span><span class="lnt">50
+</span><span class="lnt">51
+</span><span class="lnt">52
+</span><span class="lnt">53
+</span><span class="lnt">54
+</span><span class="lnt">55
+</span><span class="lnt">56
+</span><span class="lnt">57
+</span><span class="lnt">58
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-go" data-lang="go"><span class="kd">func</span> <span class="p">(</span><span class="nx">be</span> <span class="o">*</span><span class="nx">VXLANBackend</span><span class="p">)</span> <span class="nf">RegisterNetwork</span><span class="p">(</span><span class="nx">ctx</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span><span class="p">,</span> <span class="nx">config</span> <span class="o">*</span><span class="nx">subnet</span><span class="p">.</span><span class="nx">Config</span><span class="p">)</span> <span class="p">(</span><span class="nx">backend</span><span class="p">.</span><span class="nx">Network</span><span class="p">,</span> <span class="kt">error</span><span class="p">)</span> <span class="p">{</span>
+   <span class="c1">// Parse our configuration
+</span><span class="c1"></span>   <span class="nx">cfg</span> <span class="o">:=</span> <span class="kd">struct</span> <span class="p">{</span>
+      <span class="nx">VNI</span>           <span class="kt">int</span>
+      <span class="nx">Port</span>          <span class="kt">int</span>
+      <span class="nx">GBP</span>           <span class="kt">bool</span>
+      <span class="nx">Learning</span>      <span class="kt">bool</span>
+      <span class="nx">DirectRouting</span> <span class="kt">bool</span>
+   <span class="p">}{</span>
+      <span class="nx">VNI</span><span class="p">:</span> <span class="nx">defaultVNI</span><span class="p">,</span>
+   <span class="p">}</span>
+
+   <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">Backend</span><span class="p">)</span> <span class="p">&gt;</span> <span class="mi">0</span> <span class="p">{</span>
+      <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">json</span><span class="p">.</span><span class="nf">Unmarshal</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">Backend</span><span class="p">,</span> <span class="o">&amp;</span><span class="nx">cfg</span><span class="p">);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+         <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;error decoding VXLAN backend config: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+      <span class="p">}</span>
+   <span class="p">}</span>
+   <span class="nx">log</span><span class="p">.</span><span class="nf">Infof</span><span class="p">(</span><span class="s">&#34;VXLAN config: VNI=%d Port=%d GBP=%v Learning=%v DirectRouting=%v&#34;</span><span class="p">,</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">VNI</span><span class="p">,</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">Port</span><span class="p">,</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">GBP</span><span class="p">,</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">Learning</span><span class="p">,</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">DirectRouting</span><span class="p">)</span>
+
+   <span class="nx">devAttrs</span> <span class="o">:=</span> <span class="nx">vxlanDeviceAttrs</span><span class="p">{</span>
+      <span class="nx">vni</span><span class="p">:</span>       <span class="nb">uint32</span><span class="p">(</span><span class="nx">cfg</span><span class="p">.</span><span class="nx">VNI</span><span class="p">),</span>
+      <span class="nx">name</span><span class="p">:</span>      <span class="nx">fmt</span><span class="p">.</span><span class="nf">Sprintf</span><span class="p">(</span><span class="s">&#34;flannel.%v&#34;</span><span class="p">,</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">VNI</span><span class="p">),</span>
+      <span class="nx">vtepIndex</span><span class="p">:</span> <span class="nx">be</span><span class="p">.</span><span class="nx">extIface</span><span class="p">.</span><span class="nx">Iface</span><span class="p">.</span><span class="nx">Index</span><span class="p">,</span>
+      <span class="nx">vtepAddr</span><span class="p">:</span>  <span class="nx">be</span><span class="p">.</span><span class="nx">extIface</span><span class="p">.</span><span class="nx">IfaceAddr</span><span class="p">,</span>
+      <span class="nx">vtepPort</span><span class="p">:</span>  <span class="nx">cfg</span><span class="p">.</span><span class="nx">Port</span><span class="p">,</span>
+      <span class="nx">gbp</span><span class="p">:</span>       <span class="nx">cfg</span><span class="p">.</span><span class="nx">GBP</span><span class="p">,</span>
+      <span class="nx">learning</span><span class="p">:</span>  <span class="nx">cfg</span><span class="p">.</span><span class="nx">Learning</span><span class="p">,</span>
+   <span class="p">}</span>
+
+   <span class="nx">dev</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">newVXLANDevice</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">devAttrs</span><span class="p">)</span>
+   <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+   <span class="p">}</span>
+   <span class="nx">dev</span><span class="p">.</span><span class="nx">directRouting</span> <span class="p">=</span> <span class="nx">cfg</span><span class="p">.</span><span class="nx">DirectRouting</span>
+
+   <span class="nx">subnetAttrs</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nf">newSubnetAttrs</span><span class="p">(</span><span class="nx">be</span><span class="p">.</span><span class="nx">extIface</span><span class="p">.</span><span class="nx">ExtAddr</span><span class="p">,</span> <span class="nx">dev</span><span class="p">.</span><span class="nf">MACAddr</span><span class="p">())</span>
+   <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+   <span class="p">}</span>
+
+   <span class="nx">lease</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">be</span><span class="p">.</span><span class="nx">subnetMgr</span><span class="p">.</span><span class="nf">AcquireLease</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span> <span class="nx">subnetAttrs</span><span class="p">)</span>
+   <span class="k">switch</span> <span class="nx">err</span> <span class="p">{</span>
+   <span class="k">case</span> <span class="kc">nil</span><span class="p">:</span>
+   <span class="k">case</span> <span class="nx">context</span><span class="p">.</span><span class="nx">Canceled</span><span class="p">,</span> <span class="nx">context</span><span class="p">.</span><span class="nx">DeadlineExceeded</span><span class="p">:</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">err</span>
+   <span class="k">default</span><span class="p">:</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;failed to acquire lease: %v&#34;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+   <span class="p">}</span>
+
+   <span class="c1">// Ensure that the device has a /32 address so that no broadcast routes are created.
+</span><span class="c1"></span>   <span class="c1">// This IP is just used as a source address for host to workload traffic (so
+</span><span class="c1"></span>   <span class="c1">// the return path for the traffic has an address on the flannel network to use as the destination)
+</span><span class="c1"></span>   <span class="k">if</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">dev</span><span class="p">.</span><span class="nf">Configure</span><span class="p">(</span><span class="nx">ip</span><span class="p">.</span><span class="nx">IP4Net</span><span class="p">{</span><span class="nx">IP</span><span class="p">:</span> <span class="nx">lease</span><span class="p">.</span><span class="nx">Subnet</span><span class="p">.</span><span class="nx">IP</span><span class="p">,</span> <span class="nx">PrefixLen</span><span class="p">:</span> <span class="mi">32</span><span class="p">});</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="kc">nil</span><span class="p">,</span> <span class="nx">fmt</span><span class="p">.</span><span class="nf">Errorf</span><span class="p">(</span><span class="s">&#34;failed to configure interface %s: %s&#34;</span><span class="p">,</span> <span class="nx">dev</span><span class="p">.</span><span class="nx">link</span><span class="p">.</span><span class="nf">Attrs</span><span class="p">().</span><span class="nx">Name</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+   <span class="p">}</span>
+
+   <span class="k">return</span> <span class="nf">newNetwork</span><span class="p">(</span><span class="nx">be</span><span class="p">.</span><span class="nx">subnetMgr</span><span class="p">,</span> <span class="nx">be</span><span class="p">.</span><span class="nx">extIface</span><span class="p">,</span> <span class="nx">dev</span><span class="p">,</span> <span class="nx">ip</span><span class="p">.</span><span class="nx">IP4Net</span><span class="p">{},</span> <span class="nx">lease</span><span class="p">)</span>
+<span class="p">}</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>该函数主要是创建vxlan设备。配置对应的路由，给vxlan设备配置IP信息等等。</p>
+]]></content>
+            
+            
+            
+            
+            
+                
+                    
+                
+                    
+                
+            
+        </entry>
+    
+        <entry>
+            <title type="text">手动创建vxlan网络连接container</title>
+            <link rel="alternate" type="text/html" href="https://qsyqian.github.io/post/linux-vxlan-implement/" />
+            <id>https://qsyqian.github.io/post/linux-vxlan-implement/</id>
+            <updated>2019-11-24T19:03:04+08:00</updated>
+            <published>2019-08-27T10:57:51+08:00</published>
+            <author>
+                    <name>qianshuangyang</name>
+                    <uri>https://qsyqian.github.io/</uri>
+                    <email>qsyqian@gmail.com</email>
+                    </author>
+            <rights>[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh)</rights>
+    
+    <summary type="html"><![CDATA[手动创建vxlan网络连接container ​ 本文主要对linux下实现vxlan网……]]></summary>
+            
+                <content type="html"><![CDATA[
+
+<h1 id="手动创建vxlan网络连接container">手动创建vxlan网络连接container</h1>
+
+<p>​   本文主要对linux下实现vxlan网络有个初步的认识，涉及较多的是动手操作，而不是理论知识。如果想知道更多关于vxlan协议的一些理论，包括产生的北京，报文的格式，请参考<a href="https://cizixs.com/2017/09/25/vxlan-protocol-introduction" target="_blank">vxlan 协议的介绍文章</a>。</p>
+
+<p>​   在下述内容中我们主要是在linux上模拟vxlan设备，实现docker跨主机的overlay网络。</p>
+
+<h2 id="实验环境">实验环境</h2>
+
+<p>本次实验我们使用两个linux机器，系统为centos7，IP信息如下：</p>
+
+<ul>
+<li>192.168.1.100</li>
+<li>192.168.1.200</li>
+</ul>
+
+<p>​   我们搭建的overlay网络的网段为172.55.1.0/24 。实验目的就是vxlan能够通过overlay IP互相连接。</p>
+
+<h2 id="实验">实验</h2>
+
+<h3 id="点对点的vxlan">点对点的vxlan</h3>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><span class="lnt">1
+</span></pre></td>
+<td class="lntd">
+<pre class="chroma">先来搭建一个最简单的 vxlan 网络，两台机器构成一个 vxlan 网络，每台机器上有一个 vtep，vtep 通过它们的 IP 互相通信。这次实验完成后的网络结构如下图所示：</pre></td></tr></table>
+</div>
+</div>
+<p><img src="http://tva1.sinaimg.cn/large/007X8olVly1g6wqzd5x70j30fl07vweg.jpg" alt="1566869818907" /></p>
+
+<p>首先使用 <code>ip</code> 命令创建我们的 vxlan interface，在192.168.1.100上执行下述命令：</p>
+
+<p><code>ip link add vxlan1 type vxlan id 444 dstport 4789 remote 192.168.1.200 local 192.168.1.100 dev eth0</code></p>
+
+<p>大概解释下上述参数的含义：</p>
+
+<ul>
+<li>vxlan1：所创建的网络设备的名字</li>
+<li>type vxlan：所创建的网络设备的类型</li>
+<li>id 444：所创建vxlan VNI，这个值可以在 1 到 2^24 之间</li>
+<li>dstport 4789:vtep 通信的端口，linux 默认使用 8472（为了保持兼容，默认值一直没有更改），而 IANA 分配的端口是 4789，所以我们这里显式指定了它的值</li>
+<li>remote 192.168.1.200: 对方 vtep 的地址，类似于点对点协议</li>
+<li>local 192.168.1.100: 当前节点 vtep 要使用的 IP 地址</li>
+<li>dev eth0: 当节点用于 vtep 通信的网卡设备，用来读取 IP 地址。注意这个参数和 <code>local</code> 参数含义是相同的，在这里写出来是为了告诉大家有两个参数存在</li>
+</ul>
+
+<p>执行完之后会在宿主机上生成对应的网络设备，可以通过ip命令查看该网络设备的详情：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip -d link show dev vxlan1</span>
+<span class="m">1044</span>: vxlan1: &lt;BROADCAST,MULTICAST&gt; mtu <span class="m">1400</span> qdisc noop state DOWN mode DEFAULT 
+    link/ether ba:08:0a:dd:3f:71 brd ff:ff:ff:ff:ff:ff promiscuity <span class="m">0</span> 
+    vxlan id <span class="m">444</span> remote <span class="m">192</span>.168.1.200 <span class="nb">local</span> <span class="m">192</span>.168.1.100 dev eth0 srcport <span class="m">0</span> <span class="m">0</span> dstport <span class="m">4789</span> ageing <span class="m">300</span> addrgenmode eui64</code></pre></td></tr></table>
+</div>
+</div>
+<p>给vxlan1配置ip并启用：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip addr add 172.55.1.2/24 dev vxlan1</span>
+<span class="c1"># ip link set vxlan1 up</span>
+<span class="c1"># ifconfig vxlan1</span>
+vxlan1: <span class="nv">flags</span><span class="o">=</span><span class="m">4163</span>&lt;UP,BROADCAST,RUNNING,MULTICAST&gt;  mtu <span class="m">1400</span>
+        inet <span class="m">172</span>.55.1.2  netmask <span class="m">255</span>.255.255.0  broadcast <span class="m">0</span>.0.0.0
+        inet6 fe80::b808:aff:fedd:3f71  prefixlen <span class="m">64</span>  scopeid 0x20&lt;link&gt;
+        ether ba:08:0a:dd:3f:71  txqueuelen <span class="m">0</span>  <span class="o">(</span>Ethernet<span class="o">)</span>
+        RX packets <span class="m">0</span>  bytes <span class="m">0</span> <span class="o">(</span><span class="m">0</span>.0 B<span class="o">)</span>
+        RX errors <span class="m">0</span>  dropped <span class="m">0</span>  overruns <span class="m">0</span>  frame <span class="m">0</span>
+        TX packets <span class="m">9</span>  bytes <span class="m">806</span> <span class="o">(</span><span class="m">806</span>.0 B<span class="o">)</span>
+        TX errors <span class="m">0</span>  dropped <span class="m">0</span> overruns <span class="m">0</span>  carrier <span class="m">0</span>  collisions <span class="m">0</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>再次观察宿主机上几个点：</p>
+
+<ul>
+<li><p>路由变化</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip r |grep vxlan1</span>
+<span class="m">172</span>.55.1.0/24 dev vxlan1  proto kernel  scope link  src <span class="m">172</span>.55.1.2 </code></pre></td></tr></table>
+</div>
+</div></li>
+
+<li><p>vxlan fdb表变化</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># bridge fdb| grep vxlan1</span>
+<span class="m">00</span>:00:00:00:00:00 dev vxlan1 dst <span class="m">192</span>.168.1.200 via eth0 self permanent</code></pre></td></tr></table>
+</div>
+</div></li>
+</ul>
+
+<p>这个表项的意思是说，默认的而 vtep 对端地址为 <code>192.168.1.200</code>，换句话说，如果接收到的报文添加上 vxlan 头部之后都会发到 <code>192.168.1.200</code>。</p>
+
+<p>在另外一台虚拟机（<code>192.168.1.200</code>）上也进行相同的配置，要保证 VNI 也是 444，dstport 也是 4789，并修改 vtep 的地址和 remote IP 地址到相应的值。测试两台 vtep 的连通性：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># 在192.168.1.100上操作</span>
+<span class="c1"># ping -c 3 172.55.1.3</span>
+PING <span class="m">172</span>.55.1.3 <span class="o">(</span><span class="m">172</span>.55.1.3<span class="o">)</span> <span class="m">56</span><span class="o">(</span><span class="m">84</span><span class="o">)</span> bytes of data.
+<span class="m">64</span> bytes from <span class="m">172</span>.55.1.3: <span class="nv">icmp_seq</span><span class="o">=</span><span class="m">1</span> <span class="nv">ttl</span><span class="o">=</span><span class="m">64</span> <span class="nv">time</span><span class="o">=</span><span class="m">2</span>.14 ms
+<span class="m">64</span> bytes from <span class="m">172</span>.55.1.3: <span class="nv">icmp_seq</span><span class="o">=</span><span class="m">2</span> <span class="nv">ttl</span><span class="o">=</span><span class="m">64</span> <span class="nv">time</span><span class="o">=</span><span class="m">0</span>.511 ms
+<span class="m">64</span> bytes from <span class="m">172</span>.55.1.3: <span class="nv">icmp_seq</span><span class="o">=</span><span class="m">3</span> <span class="nv">ttl</span><span class="o">=</span><span class="m">64</span> <span class="nv">time</span><span class="o">=</span><span class="m">0</span>.599 ms
+
+--- <span class="m">172</span>.55.1.3 ping statistics ---
+<span class="m">3</span> packets transmitted, <span class="m">3</span> received, <span class="m">0</span>% packet loss, <span class="nb">time</span> 2001ms
+rtt min/avg/max/mdev <span class="o">=</span> <span class="m">0</span>.511/1.083/2.140/0.748 ms</code></pre></td></tr></table>
+</div>
+</div>
+<p>那么问题来了，这两个vxlan设备是可以正常通信，怎么证明其走的就是隧道网络呢？其实可以通过抓包来看包的头部包含哪些内容来判断。</p>
+
+<h3 id="多播模式的vxlan">多播模式的vxlan</h3>
+
+<p>​   上述实现了点对点的vxlan，其实没啥大用。因为一般集群不止两个节点，因此多播模式的vxlan需要研究一下。</p>
+
+<p>​   这个实验和前面一个非常相似，只不过主机之间不是点对点的连接，而是通过多播组成一个虚拟的整体。最终的网络架构也很相似（为了简单图中只有两个主机，但这个模型可以容纳多个主机组成 vxlan 网络）。</p>
+
+<p><img src="http://tva1.sinaimg.cn/large/007X8olVly1g6wr0twgasj30fl0aw74b.jpg" alt="1566870232376" /></p>
+
+<p>​   同样的，先创建vxlan设备，命令如下：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip link add vxlan1 type vxlan id 444 dstport 4789 group 239.1.1.1  dev eth0</span>
+<span class="c1"># ip addr add 172.55.1.2/24 dev vxlan1</span>
+<span class="c1"># ip link set vxlan1 up</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>​   这个命令和上述点对点的vxlan设备创建命令相似，主要不同的是group，很容易理解，点对点的时候，只需要指明对端的地址就行。而在多播模式下，需要把不同的主机加到一个组（group）内，因此需要制定一个group address。关于多播的原理和使用不是这篇文章的重点，这里选择的多播 IP 地址也没有特殊的含义，关于多播的内容可以自行了解。</p>
+
+<p>​   上述命令运行完之后，在宿主机上路由不变，和点对点的一样：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip r | grep vxlan1</span>                  
+<span class="m">172</span>.55.1.0/24 dev vxlan1  proto kernel  scope link  src <span class="m">172</span>.55.1.2</code></pre></td></tr></table>
+</div>
+</div>
+<p>​   不同的是bridge fdb信息：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># bridge fdb |grep vxlan1</span> 
+<span class="m">00</span>:00:00:00:00:00 dev vxlan1 dst <span class="m">239</span>.1.1.1 via eth0 self permanent</code></pre></td></tr></table>
+</div>
+</div>
+<p>​   这里默认表项的 dst 字段的值变成了多播地址 <code>239.1.1.1</code>，而不是之前对方的 vtep 地址。同理给所有需要通信的节点进行上述配置，可以验证他们能通过 172.55..1.0/24 网络互相访问。</p>
+
+<p>​   我们来分析这个模式下 vxlan 通信的过程：</p>
+
+<p>​   在配置完成之后，所有linux机器的vtep 通过 IGMP 加入同一个多播网络 <code>239.1.1.1</code>。</p>
+
+<ol>
+<li>发送 ping 报文到 <code>172.55.1.3</code>，查看路由表，报文会从 vxlan1 发出去</li>
+<li>内核发现 vxlan1 的 IP 是 <code>172.55.1.2/24</code>，和目的 IP 在同一个网段，所以在同一个局域网，需要知道对方的 MAC 地址，因此会发送 ARP 报文查询</li>
+<li>ARP 报文源 MAC 地址为 vxlan1 的 MAC 地址，目的 MAC 地址为全 1 的广播地址</li>
+<li>vxlan 根据配置（VNI 444）添加上头部</li>
+<li>因为不知道对方 vtep 在哪台主机上，根据配置，vtep 会往多播地址 239.1.1.1 发送多播报文</li>
+<li>多播组中所有的主机都会受到这个报文，内核发现是 vxlan 报文，会根据 VNI 发送给对应的 vtep</li>
+<li>vtep 去掉 vxlan 头部，取出真正的 ARP 请求报文。同时 vtep 会记录 <code>&lt;源 MAC 地址 - vtep 所在主机 IP 地址&gt;</code> 信息到 fdb 表中</li>
+<li>如果发现 ARP 不是发送给自己的，直接丢弃；如果是发送给自己的，则生成 ARP 应答报文</li>
+<li>应答报文目的 MAC 地址是发送方 vtep 的 MAC 地址，而且 vtep 已经通过源报文学习到了 vtep 所在的主机，因此会直接单播发送给目的 vtep。因此 vtep 不需要多播，就能填充所有的头部信息</li>
+<li>应答报文通过 underlay 网络直接返回给发送方主机，发送方主机根据 VNI 把报文转发给 vtep，vtep 解包取出 ARP 应答报文，添加 arp 缓存到内核。并根据报文学习到目的 vtep 所在的主机地址，添加到 fdb 表中</li>
+<li>vtep 已经知道了通信需要的所有信息，后续 ICMP 的 ping 报文都是单播进行的。</li>
+</ol>
+
+<p>​   在这个过程中，在主机上抓包更容易看到通信的具体情况，下面是 ARP 请求报文的详情：</p>
+
+<p><img src="https://ws3.sinaimg.cn/large/006tKfTcgy1fjyb6b5ybdj30x20lq11q.jpg" alt="img" /></p>
+
+<p>可以看到 vxlan 报文可以分为三块：</p>
+
+<ul>
+<li>里层（图中最下面）是 overlay 网络中实体看到的报文（比如这里的 ARP 请求），它们和经典网络的通信报文没有任何区别，除了因为 MTU 导致有些报文比较小</li>
+<li>然后是 vxlan 头部，我们最关心的字段 VNI 确实是 444</li>
+<li>最外层（图中最上面）是 vtep 所在主机的通信报文头部。可以看到这里 IP 地址为多播 <code>239.1.1.1</code>，目的 MAC 地址也是多播对应的地址</li>
+</ul>
+
+<p>而 ARP 应答报文不是多播而是单播的事实也能看出来：</p>
+
+<p><img src="https://ws1.sinaimg.cn/large/006tKfTcgy1fjybddu0boj31kw11ekaq.jpg" alt="img" /></p>
+
+<p>从上面的通信过程，可以看出不少信息：</p>
+
+<ul>
+<li>多播其实就相当于 vtep 之间的广播，报文会发给所有的 vtep，但是只有一个会做出应答</li>
+<li>vtep 会通过接收到的报文学习 <code>MAC - VNI - Vtep IP</code> 的信息，减少后续不必要的多播报文</li>
+<li>对于 overlay 网络中的通信实体来说，整个通信过程对它们的透明的，它们认为自己的通信过程和经典网络没有区别</li>
+</ul>
+
+<p>通信结束之后，可以在主机上看到保存的 ARP 缓存：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip neigh |grep vxlan1</span>
+<span class="m">172</span>.55.1.2 dev vxlan1 lladdr 0a:86:31:3c:0d:6b STALE</code></pre></td></tr></table>
+</div>
+</div>
+<p>另外查看bridge的fdb信息也有所变化：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># bridge fdb | grep vxlan1</span>
+<span class="m">00</span>:00:00:00:00:00 dev vxlan1 dst <span class="m">239</span>.1.1.1 via eth0 self permanent
+0a:86:31:3c:0d:6b dev vxlan1 dst <span class="m">192</span>.168.1.100 self </code></pre></td></tr></table>
+</div>
+</div>
+<p>可以看到，增加了一条点对点的信息。</p>
+
+<p>上述我们演示了点对点的vxlan，以及多播模式的vxlan，但是测试都是通过vtep设备的ip来进行通信的，下面使用linux bridge以及namespace来模拟docker跨宿主机之间使用overlay（vxlan）通信过程。</p>
+
+<h3 id="利用bridge接入容器">利用bridge接入容器</h3>
+
+<p>​   尽管上面的方法能够通过多播实现自动化的 overlay 网络构建，但是通信的双方只有 vtep，在实际的生产中，每台主机上都有几十台甚至上百台的虚拟机或者容器需要通信，因此我们需要找到一种方法能够把这些通信实体组织起来。</p>
+
+<p>​   在 linux 中把同一个网段的 interface 组织起来正是网桥（bridge，或者 switch，这两个名称等价）的功能，因此这部分我们介绍如何用网桥把多个虚拟机或者容器放到同一个 vxlan overlay 网络中。最终实现的网络架构如下图所示：</p>
+
+<p><img src="http://tva1.sinaimg.cn/large/007X8olVly1g6wr1rccnzj30fl0aw3yn.jpg" alt="1566871032525" /></p>
+
+<p>​   因为创建虚拟机或者容器比较麻烦，我们用 network namespace 来模拟，从理论上它们是一样的。关于 network namespace 和 veth pair 的基础知识，请参考我<a href="https://cizixs.com/2017/02/10/network-virtualization-network-namespace" target="_blank">这篇文章</a>。</p>
+
+<p>​   对于每个容器/虚拟机，我们创建一个 network namespace，并通过一对 veth pair 把容器中的 eth0 网络连接到网桥上。同时 vtep 也会放到网桥上，以便能够对报文进行 vxlan 相关的处理。</p>
+
+<p>​   首先我们创建 vtep interface，使用的是多播模式：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip link add vxlan1 type vxlan \</span>
+    id <span class="m">444</span> <span class="se">\
+</span><span class="se"></span>    dstport <span class="m">4789</span> <span class="se">\
+</span><span class="se"></span>    group <span class="m">239</span>.1.1.1 <span class="se">\
+</span><span class="se"></span>    <span class="nb">local</span> <span class="m">192</span>.168.1.100 <span class="se">\
+</span><span class="se"></span>    dev eth0</code></pre></td></tr></table>
+</div>
+</div>
+<p>​   然后创建网桥 <code>br0</code>，把 vtep interface 绑定到上面：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># 创建名字为br0的网桥</span>
+<span class="c1"># ip link add br0 type bridge</span>
+<span class="c1"># 将vxlan设备vxlan1加到br0上</span>
+<span class="c1"># ip link set dev vxlan1 master br0</span>
+<span class="c1"># ip link set vxlan1 up</span>
+<span class="c1"># ip link set br0 up</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>​   下面使用network namespace来模拟container，利用veth pair设备将容器桥接到br0上：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip netns add container1</span>
+
+<span class="c1"># 创建 veth pair，并把一端加到网桥上</span>
+<span class="c1"># ip link add veth0 type veth peer name veth1</span>
+<span class="c1"># ip link set dev veth0 master br0</span>
+<span class="c1"># ip link set dev veth0 up</span>
+
+<span class="c1"># 配置容器内部的网络和 IP</span>
+<span class="c1"># ip link set dev veth1 netns container1</span>
+<span class="c1"># ip netns exec container1 ip link set lo up</span>
+
+<span class="c1"># ip netns exec container1 ip link set veth1 name eth0</span>
+<span class="c1"># ip netns exec container1 ip addr add 172.55.1.2/24 dev eth0</span>
+<span class="c1"># ip netns exec container1 ip link set eth0 up</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>​   这样子在主机10.104.109.48就设置好了vxlan设备和容器，可以查看具体的设备情况：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span><span class="lnt">15
+</span><span class="lnt">16
+</span><span class="lnt">17
+</span><span class="lnt">18
+</span><span class="lnt">19
+</span><span class="lnt">20
+</span><span class="lnt">21
+</span><span class="lnt">22
+</span><span class="lnt">23
+</span><span class="lnt">24
+</span><span class="lnt">25
+</span><span class="lnt">26
+</span><span class="lnt">27
+</span><span class="lnt">28
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># brctl show br0</span>
+bridge name     bridge id               STP enabled     interfaces
+br0             <span class="m">8000</span>.0a86313c0d6b       no              veth0
+                                                        vxlan1
+
+<span class="c1"># ifconfig vxlan1</span>
+vxlan1: <span class="nv">flags</span><span class="o">=</span><span class="m">4163</span>&lt;UP,BROADCAST,RUNNING,MULTICAST&gt;  mtu <span class="m">1400</span>
+        inet6 fe80::886:31ff:fe3c:d6b  prefixlen <span class="m">64</span>  scopeid 0x20&lt;link&gt;
+        ether 0a:86:31:3c:0d:6b  txqueuelen <span class="m">0</span>  <span class="o">(</span>Ethernet<span class="o">)</span>
+        RX packets <span class="m">13</span>  bytes <span class="m">732</span> <span class="o">(</span><span class="m">732</span>.0 B<span class="o">)</span>
+        RX errors <span class="m">0</span>  dropped <span class="m">0</span>  overruns <span class="m">0</span>  frame <span class="m">0</span>
+        TX packets <span class="m">13</span>  bytes <span class="m">1122</span> <span class="o">(</span><span class="m">1</span>.0 KiB<span class="o">)</span>
+        TX errors <span class="m">0</span>  dropped <span class="m">0</span> overruns <span class="m">0</span>  carrier <span class="m">0</span>  collisions <span class="m">0</span>
+<span class="c1"># ip netns exec container1 ip a</span>
+<span class="m">1</span>: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu <span class="m">65536</span> qdisc noqueue state UNKNOWN 
+    link/loopback <span class="m">00</span>:00:00:00:00:00 brd <span class="m">00</span>:00:00:00:00:00
+    inet <span class="m">127</span>.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+<span class="m">1042</span>: eth0@if1043: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu <span class="m">1500</span> qdisc pfifo_fast state UP qlen <span class="m">1000</span>
+    link/ether c6:5d:76:b7:df:24 brd ff:ff:ff:ff:ff:ff link-netnsid <span class="m">0</span>
+    inet <span class="m">172</span>.55.1.2/24 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::c45d:76ff:feb7:df24/64 scope link 
+       valid_lft forever preferred_lft forever
+<span class="c1"># ip netns exec container1 ip r</span>
+<span class="m">172</span>.55.1.0/24 dev eth0  proto kernel  scope link  src <span class="m">172</span>.55.1.2</code></pre></td></tr></table>
+</div>
+</div>
+<p>上述步骤在另外一台机器上执行，然后验证网络连通性：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip netns exec container1 ping -c 4 172.55.1.2</span>
+PING <span class="m">172</span>.55.1.2 <span class="o">(</span><span class="m">172</span>.55.1.2<span class="o">)</span> <span class="m">56</span><span class="o">(</span><span class="m">84</span><span class="o">)</span> bytes of data.
+<span class="m">64</span> bytes from <span class="m">172</span>.55.1.2: <span class="nv">icmp_seq</span><span class="o">=</span><span class="m">1</span> <span class="nv">ttl</span><span class="o">=</span><span class="m">64</span> <span class="nv">time</span><span class="o">=</span><span class="m">0</span>.536 ms
+<span class="m">64</span> bytes from <span class="m">172</span>.55.1.2: <span class="nv">icmp_seq</span><span class="o">=</span><span class="m">2</span> <span class="nv">ttl</span><span class="o">=</span><span class="m">64</span> <span class="nv">time</span><span class="o">=</span><span class="m">0</span>.540 ms
+<span class="m">64</span> bytes from <span class="m">172</span>.55.1.2: <span class="nv">icmp_seq</span><span class="o">=</span><span class="m">3</span> <span class="nv">ttl</span><span class="o">=</span><span class="m">64</span> <span class="nv">time</span><span class="o">=</span><span class="m">0</span>.673 ms
+<span class="m">64</span> bytes from <span class="m">172</span>.55.1.2: <span class="nv">icmp_seq</span><span class="o">=</span><span class="m">4</span> <span class="nv">ttl</span><span class="o">=</span><span class="m">64</span> <span class="nv">time</span><span class="o">=</span><span class="m">2</span>.82 ms
+
+--- <span class="m">172</span>.55.1.2 ping statistics ---
+<span class="m">4</span> packets transmitted, <span class="m">4</span> received, <span class="m">0</span>% packet loss, <span class="nb">time</span> 3000ms
+rtt min/avg/max/mdev <span class="o">=</span> <span class="m">0</span>.536/1.142/2.820/0.970 ms</code></pre></td></tr></table>
+</div>
+</div>
+<p>容器通信过程和前面的实验类似，只不过这里容器发出的 ARP 报文会被网桥转发给 <code>vxlan0</code>，然后 <code>vxlan0</code> 添加 vxlan 头部通过多播来找到对方的 MAC 地址。</p>
+
+<p>从逻辑上可以认为，在 <code>vxlan1</code> 的帮助下同一个 vxlan overlay 网络中的容器是连接到同一个网桥上的，示意图如下：</p>
+
+<p><img src="http://tva1.sinaimg.cn/large/007X8olVly1g6wr243umcj30fl0awt8w.jpg" alt="1566871334979" /></p>
+
+<p>多播实现很简单，不需要中心化的控制。但是不是所有的网络都支持多播，而且需要事先规划多播组和 VNI 的对应关系，在 overlay 网络数量比较多时也会很麻烦，多播也会导致大量的无用报文在网络中出现。现在很多云计算的网络都会通过自动化的方式来发现 vtep 和 MAC 信息，也就是自动构建 vxlan 网络。下面的几个部分，我们来解开自动化 vxlan 网络的秘密。</p>
+
+<h3 id="手动维护-vtep-组">手动维护 vtep 组</h3>
+
+<p>经过上面几个实验，我们来思考一下为什么要使用多播。因为对 overlay 网络来说，它的网段范围是分布在多个主机上的，因此传统 ARP 报文的广播无法直接使用。要想做到 overlay 网络的广播，必须把报文发送到所有 vtep 在的节点，这才引入了多播。</p>
+
+<p>如果有一种方法能够不通过多播，能把 overlay 的广播报文发送给所有的 vtep 主机的话，也能达到相同的功能。当然在维护 vtep 网络组之前，必须提前知道哪些 vtep 要组成一个网络，以及这些 vtep 在哪些主机上。</p>
+
+<p>Linux 的 vxlan 模块也提供了这个功能，而且实现起来并不复杂。创建 vtep interface 的时候不使用 <code>remote</code> 或者 <code>group</code> 参数就行：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ ip link add vxlan0 <span class="nb">type</span> vxlan <span class="se">\
+</span><span class="se"></span>    id <span class="m">42</span> <span class="se">\
+</span><span class="se"></span>    dstport <span class="m">4789</span> <span class="se">\
+</span><span class="se"></span>    dev eth0 </code></pre></td></tr></table>
+</div>
+</div>
+<p>这个 vtep interface 创建的时候没有指定多播地址，当第一个 ARP 请求报文发送时它也不知道要发送给谁。但是我们可以手动添加默认的 FDB 表项，比如：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ bridge fdb append <span class="m">00</span>:00:00:00:00:00 dev vxlan0 dst <span class="m">192</span>.168.1.100
+$ bridge fdb append <span class="m">00</span>:00:00:00:00:00 dev vxlan0 dst <span class="m">192</span>.168.1.200</code></pre></td></tr></table>
+</div>
+</div>
+<p>这样的话，如果不知道对方 VTEP 的地址，就会往选择默认的表项，发到 <code>192.168.8.100</code> 和 <code>192.168.8.200</code>，相当于手动维护了一个 vtep 的多播组。</p>
+
+<p>在所有的节点的 vtep 上更新对应的 fdb 表项，就能实现 overlay 网络的连通。整个通信流程和多播模式相同，唯一的区别是，vtep 第一次会给所有的组内成员发送单播报文，当然也只有一个 vtep 会做出应答。</p>
+
+<p>使用一些自动化工具，定时更新 FDB 表项，就能动态地维护 VTEP 的拓扑结构。</p>
+
+<p>这个方案解决了在某些 underlay 网络中不能使用多播的问题，但是并没有解决多播的另外一个问题：每次要查找 MAC 地址要发送大量的无用报文，如果 vtep 组节点数量很大，那么每次查询都发送 N 个报文，其中只有一个报文真正有用。</p>
+
+<h3 id="手动维护fdb表">手动维护fdb表</h3>
+
+<p>如果提前知道目的容器 MAC 地址和它所在主机的 IP 地址，也可以通过更新 fdb 表项来减少广播的报文数量。</p>
+
+<p>创建 vtep 的命令：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ ip link add vxlan0 <span class="nb">type</span> vxlan <span class="se">\
+</span><span class="se"></span>    id <span class="m">42</span> <span class="se">\
+</span><span class="se"></span>    dstport <span class="m">4789</span> <span class="se">\
+</span><span class="se"></span>    dev eth0 <span class="se">\
+</span><span class="se"></span>    nolearning</code></pre></td></tr></table>
+</div>
+</div>
+<p>这次我们添加了 <code>nolearning</code> 参数，这个参数告诉 vtep 不要通过收到的报文来学习 fdb 表项的内容，因为我们会自动维护这个列表。</p>
+
+<p>然后可以添加 fdb 表项告诉 vtep 容器 MAC 对应的主机 IP 地址：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ bridge fdb append <span class="m">52</span>:5e:55:58:9a:ab dev vxlan0 dst <span class="m">192</span>.168.1.100
+$ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst <span class="m">192</span>.168.1.200</code></pre></td></tr></table>
+</div>
+</div>
+<p>如果知道了对方的 MAC 地址，vtep 搜索 fdb 表项就知道应该发送到哪个对应的 vtep 了。需要注意是的，这个情况还是需要默认的表项（那些全零的表项），在不知道容器 IP 和 MAC 对应关系的时候通过默认方式发送 ARP 报文去查询对方的 MAC 地址。</p>
+
+<p>需要注意的是，和上一个方法相比，这个方法并没有任何效率上的改进，只是把自动学习 fdb 表项换成了手动维护（当然实际情况一般是自动化程序来维护），第一次发送 ARP 请求还是会往 vtep 组发送大量单播报文。</p>
+
+<p>当时这个方法给了我们很重要的提示：如果实现知道 vxlan 网络的信息，<strong>vtep 需要的信息都是可以自动维护的，而不需要学习</strong>。</p>
+
+<h3 id="手动维护arp表">手动维护arp表</h3>
+
+<p>除了维护 fdb 表，arp 表也是可以维护的。如果能通过某个方式知道容器的 IP 和 MAC 地址对应关系，只要更新到每个节点，就能实现网络的连通。</p>
+
+<p>但是这里有个问题，我们需要维护的是每个容器里面的 ARP 表项，因为最终通信的双方是容器。到每个容器里面（所有的 network namespace）去更新对应的 ARP 表，是件工作量很大的事情，而且容器的创建和删除还是动态的，。linux 提供了一个解决方案，vtep 可以作为 arp 代理，回复 arp 请求，也就是说只要 vtep interface 知道对应的 <code>IP - MAC</code> 关系，在接收到容器发来的 ARP 请求时可以直接作出应答。这样的话，我们只需要更新 vtep interface 上 ARP 表项就行了。</p>
+
+<p>创建 vtep interface 需要加上 <code>proxy</code> 参数：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ ip link add vxlan0 <span class="nb">type</span> vxlan <span class="se">\
+</span><span class="se"></span>    id <span class="m">42</span> <span class="se">\
+</span><span class="se"></span>    dstport <span class="m">4789</span> <span class="se">\
+</span><span class="se"></span>    dev eth0 <span class="se">\
+</span><span class="se"></span>    nolearning <span class="se">\
+</span><span class="se"></span>    proxy</code></pre></td></tr></table>
+</div>
+</div>
+<p>这条命令和上部分相比多了 <code>proxy</code> 参数，这个参数告诉 vtep 承担 ARP 代理的功能。如果收到 ARP 请求，并且自己知道结果就直接作出应答。</p>
+
+<p>当然我们还是要手动更新 fdb 表项来构建 vtep 组，</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ bridge fdb append <span class="m">52</span>:5e:55:58:9a:ab dev vxlan0 dst <span class="m">192</span>.168.1.100
+$ bridge fdb append d6:d9:cd:0a:a4:28 dev vxlan0 dst <span class="m">192</span>.168.1.200</code></pre></td></tr></table>
+</div>
+</div>
+<p>然后，还需要为 vtep 添加 arp 表项，所有要通信容器的 <code>IP - MAC</code>二元组都要加进去。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ ip neigh add <span class="m">172</span>.55.1.2 lladdr d6:d9:cd:0a:a4:28 dev vxlan0
+$ ip neigh add <span class="m">172</span>.55.1.3 lladdr <span class="m">52</span>:5e:55:58:9a:ab dev vxlan0</code></pre></td></tr></table>
+</div>
+</div>
+<p>在要通信的所有节点配置完之后，容器就能互相 ping 通。当容器要访问彼此，并且第一次发送 ARP 请求时，这个请求并不会发给所有的 vtep，而是当前由当前 vtep 做出应答，大大减少了网络上的报文。</p>
+
+<p>借助自动化的工具做到实时的表项（fdb 和 arp）更新，这种方法就能很高效地实现 overlay 网络的通信。</p>
+
+<h3 id="动态更新-arp-和-fdb-表项">动态更新 arp 和 fdb 表项</h3>
+
+<p>尽管前一种方法通过动态更新 fdb 和 arp 表避免多余的网络报文，但是还有一个的问题：为了能够让所有的容器正常工作，所有可能会通信的容器都必须提前添加到 ARP 和 fdb 表项中。但并不是网络上所有的容器都会互相通信，所以<strong>添加的有些表项（尤其是 ARP 表项）是用不到的</strong>。</p>
+
+<p>Linux 提供了另外一种方法，内核能够动态地通知节点要和哪个容器通信，应用程序可以订阅这些事件，如果内核发现需要的 ARP 或者 fdb 表项不存在，会发送事件给订阅的应用程序，这样应用程序从中心化的控制拿到这些信息来更新表项，做到更精确的控制。</p>
+
+<p>要收到 L2（fdb）miss，必须要满足几个条件：</p>
+
+<ul>
+<li>目的 MAC 地址未知，也就是没有对应的 fdb 表项</li>
+<li>fdb 中没有全零的表项，也就是说默认规则</li>
+<li>目的 MAC 地址不是多播或者广播地址</li>
+</ul>
+
+<p>要实现这种功能，创建 vtep 的时候需要加上额外的参数：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span><span class="lnt">7
+</span><span class="lnt">8
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ ip link add vxlan0 <span class="nb">type</span> vxlan <span class="se">\
+</span><span class="se"></span>    id <span class="m">42</span> <span class="se">\
+</span><span class="se"></span>    dstport <span class="m">4789</span> <span class="se">\
+</span><span class="se"></span>    dev eth0 <span class="se">\
+</span><span class="se"></span>    nolearning <span class="se">\
+</span><span class="se"></span>    proxy <span class="se">\
+</span><span class="se"></span>    l2miss <span class="se">\
+</span><span class="se"></span>    l3miss</code></pre></td></tr></table>
+</div>
+</div>
+<p>这次多了两个参数 <code>l2miss</code> 和 <code>l3miss</code>：</p>
+
+<ul>
+<li><code>l2miss</code>：如果设备找不到 MAC 地址需要的 vtep 地址，就发送通知事件</li>
+<li><code>l3miss</code>：如果设备找不到需要 IP 对应的 MAC 地址，就发送通知事件</li>
+</ul>
+
+<p><code>ip monitor</code> 命令能做到这点，监听某个 interface 的事件，具体用法请参考 man 手册.</p>
+
+<p><code># ip monitor all dev vxlan0</code></p>
+
+<p>如果从本节点容器 ping 另外一个节点的容器，就先发生 l3 miss，这是 l3miss 的通知事件，：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip monitor all dev vxlan0</span>
+<span class="o">[</span>nsid current<span class="o">]</span>miss <span class="m">172</span>.55.1.3  STALE</code></pre></td></tr></table>
+</div>
+</div>
+<p><code>l3miss</code> 是说这个 IP 地址，vtep 不知道它对应的 MAC 地址，因此要手动添加 arp 记录：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ ip neigh replace <span class="m">172</span>.55.1.3 <span class="se">\
+</span><span class="se"></span>    lladdr b2:ee:aa:42:8b:0b <span class="se">\
+</span><span class="se"></span>    dev vxlan0 <span class="se">\
+</span><span class="se"></span>    nud reachable</code></pre></td></tr></table>
+</div>
+</div>
+<p>上面这条命令设置的 <code>nud reachable</code> 参数意思是，这条记录有一个超时时间，系统发现它无效一段时间会自动删除。这样的好处是，不需要手动去删除它，删除后需要通信内核会再次发送通知事件。 <code>nud</code> 是 <code>Neighbour Unreachability Detection</code> 的缩写， 当然根据需要这个参数也可以设置成其他值，比如 <code>permanent</code>，表示这个记录永远不会过时，系统不会检查它是否正确，也不会删除它，只有管理员也能对它进行修改。</p>
+
+<p>这时候还是不能正常通信，接着会出现 l2miss 的通知事件：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># ip monitor all dev vxlan0</span>
+<span class="o">[</span>nsid current<span class="o">]</span>miss lladdr b2:ee:aa:42:8b:0b STALE</code></pre></td></tr></table>
+</div>
+</div>
+<p>类似的，这个事件是说不知道这个容器的 MAC 地址在哪个节点上，所以要手动添加 fdb 记录：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># bridge fdb add b2:ee:aa:42:8b:0b dst 192.168.8.101 dev vxlan0</span></code></pre></td></tr></table>
+</div>
+</div>
+<p>在通信的另一台机器上执行响应的操作，就会发现两者能 ping 通了。</p>
+
+<h2 id="总结">总结</h2>
+
+<p>上面提出的所有方案中，其中手动的部分都可以使用程序来自动完成，需要的信息一般都是从集中式的控制中心获取的，这也是大多数基于 vxlan 的 SDN 网络的大致架构。当然具体的实现不一定和某种方法相同，可能是上述方法的变形或者组合，但是设计思想都是一样的。</p>
+
+<p>虽然上述的实验中，为了简化图中只有两台主机，而且只有一个 vxlan 网络，但是利用相同的操作很容易创建另外一个 vxlan 网络（必须要保证 vtep 的 VNI 值不同，如果使用多播，也要保证多播 IP 不同），如下图所示：</p>
+
+<p><img src="http://tva1.sinaimg.cn/large/007X8olVly1g6wr2luuenj30pg0b2jrq.jpg" alt="1566871782602" /></p>
+
+<p>主机会根据 VNI 来区别不同的 vxlan 网络，不同的 vxlan 网络之间不会相互影响。如果再加上 network namespace，就能实现更复杂的网络结构。</p>
+]]></content>
+            
+            
+            
+            
+            
+                
+                    
+                
+                    
+                
+            
+        </entry>
+    
+        <entry>
+            <title type="text">使用hugo搭建博客</title>
+            <link rel="alternate" type="text/html" href="https://qsyqian.github.io/post/use-hugo-deploy-blog/" />
+            <id>https://qsyqian.github.io/post/use-hugo-deploy-blog/</id>
+            <updated>2019-11-24T19:03:04+08:00</updated>
+            <published>2019-08-14T10:50:41+08:00</published>
+            <author>
+                    <name>qianshuangyang</name>
+                    <uri>https://qsyqian.github.io/</uri>
+                    <email>qsyqian@gmail.com</email>
+                    </author>
+            <rights>[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh)</rights>
+    
+    <summary type="html"><![CDATA[使用hugo和github搭建博客 一、安装hugo ​ 去hugo下载地址下载所需要的版……]]></summary>
+            
+                <content type="html"><![CDATA[
+
+<h1 id="使用hugo和github搭建博客">使用hugo和github搭建博客</h1>
+
+<h2 id="一-安装hugo">一、安装hugo</h2>
+
+<p>​   去<a href="https://github.com/gohugoio/hugo/releases" target="_blank">hugo下载地址</a>下载所需要的版本的hugo软件，如果是windows的就下载对应的压缩包，解压后得到<code>hugo.exe</code>，然后配置好环境变量，就可以在cmd中全局使用hugo命令。</p>
+
+<h2 id="二-创建本地博客目录">二、创建本地博客目录</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="nb">cd</span> d:
+hugo.exe new site sqian-blog
+<span class="nb">cd</span> sqian-blog</code></pre></td></tr></table>
+</div>
+</div>
+<p>​   上述三条命令分别是：进入到D盘目录，使用hugo创建一个博客目录，进入到该目录中。目录结构大概是：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"> ll
+total <span class="m">25</span>
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">12</span> <span class="m">18</span>:25 archetypes/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span> <span class="m">4283</span> 8月  <span class="m">14</span> <span class="m">09</span>:42 config.toml
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>  <span class="m">842</span> 8月  <span class="m">12</span> <span class="m">18</span>:55 config.toml.casper
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">12</span> <span class="m">18</span>:36 content/
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">12</span> <span class="m">18</span>:25 data/
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">12</span> <span class="m">18</span>:25 layouts/
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">31</span>  <span class="m">1754</span> public/
+-rw-r--r-- <span class="m">1</span> user <span class="m">197121</span>   <span class="m">40</span> 8月  <span class="m">12</span> <span class="m">19</span>:24 README.md
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">12</span> <span class="m">18</span>:28 resources/
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">12</span> <span class="m">18</span>:25 static/
+drwxr-xr-x <span class="m">1</span> user <span class="m">197121</span>    <span class="m">0</span> 8月  <span class="m">14</span> <span class="m">09</span>:36 themes/</code></pre></td></tr></table>
+</div>
+</div>
+<h2 id="三-创建文章">三、创建文章</h2>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">hugo new about.md</code></pre></td></tr></table>
+</div>
+</div>
+<p>​   上述命令使用hugo来创建一个名字为<code>about.md</code>的文章。执行完上述命令之后，在content目录下回生成该文件。</p>
+
+<p>​   当然也可以给文章分类，创建到不同的目录中：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">hugo new post/first.md</code></pre></td></tr></table>
+</div>
+</div>
+<p>​   上述命令在content的post目录下，生成名字为<code>first.md</code>的文章。</p>
+
+<p>​   打开上述md文件，编辑保存即可。</p>
+
+<h2 id="四-安装主题">四、安装主题</h2>
+
+<p>​   hugo支持多种主题，在github上也有很多开源的主题可供使用。</p>
+
+<p>​   本次我们选择一个简约的主题，地址为：<a href="https://github.com/xianmin/hugo-theme-jane" target="_blank">https://github.com/xianmin/hugo-theme-jane</a></p>
+
+<p>​   不同的主题安装过程大体都类似，比如安装上述主题的过程为：</p>
+
+<ul>
+<li>下载主题到主题目录：</li>
+</ul>
+
+<p><code>git clone https://github.com/xianmin/hugo-theme-jane.git --depth=1 themes/jane</code></p>
+
+<ul>
+<li>拷贝并编辑配置文件：</li>
+</ul>
+
+<p>如果细心点会发现在我们创建的博客根目录下有个配置文件<code>config.yaml</code>，该配置文件根据不同的主题，配置项可能不同，我们直接从该主题中拷贝一个样本配置文件到博客根目录，然后根据需要修改：</p>
+
+<p><code>cp themes/jane/exampleSite/config.toml ./</code></p>
+
+<h2 id="五-本地预览">五、本地预览</h2>
+
+<p>​   上述我们编辑了我们的博客内容，修改了主题，需要现在本地预览，看是否有书写、格式错误，等待无误后再发布出去。</p>
+
+<p>​   可以使用hugo在本地直接启动server来预览，命令如下：</p>
+
+<p>​   <code>hugo server --theme=hyde --buildDrafts</code></p>
+
+<p>​   上述有两个参数：</p>
+
+<ul>
+<li>--theme：指定渲染的主题；</li>
+<li>--buildDrafts：使用hugo自动生成的md博客文件头中，都会有对应的draft参数，表示该文章还在编辑中。预览模式下我们期望的预览所有，所以加上该参数。如果我们博客编辑完成了，需要把改参数去掉，然后使用hugo编译，发布到github上。</li>
+</ul>
+
+<p>​   hugo本地启动之后，就可以浏览器访问<code>localhost:1313</code>来预览效果，如果有问题，及时修改即可。</p>
+
+<h2 id="六-发布">六、发布</h2>
+
+<p>​   上述我们在本地已经调试好了。如果将我们的博客发布到github上给别人看呢。这里需要普及的一个知识是，每一个github账户可以创建一个特殊的仓库：<code>$username.github.io</code>，创建好之后，我们可以通过浏览器访问地址:<code>http://$username.github.io</code>来访问主页。因此我们可以在该特殊的仓库中建立我们的博客站点。<a href="https://pages.github.com/" target="_blank">github Pages</a></p>
+
+<p>​   假设我们创建好仓库<code>https://github.com/qsyqian/qsyqian.github.io</code>。进入到我们的站点根目录，编译生成站点：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span><span class="lnt">11
+</span><span class="lnt">12
+</span><span class="lnt">13
+</span><span class="lnt">14
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">hugo --theme<span class="o">=</span>jane
+Building sites …
+                   <span class="p">|</span> EN
++------------------+----+
+  Pages            <span class="p">|</span> <span class="m">13</span>
+  Paginator pages  <span class="p">|</span>  <span class="m">0</span>
+  Non-page files   <span class="p">|</span>  <span class="m">0</span>
+  Static files     <span class="p">|</span> <span class="m">19</span>
+  Processed images <span class="p">|</span>  <span class="m">0</span>
+  Aliases          <span class="p">|</span>  <span class="m">2</span>
+  Sitemaps         <span class="p">|</span>  <span class="m">1</span>
+  Cleaned          <span class="p">|</span>  <span class="m">0</span>
+
+Total in <span class="m">188</span> ms</code></pre></td></tr></table>
+</div>
+</div>
+<p>​   主题选项要选择自己已经安装好的主题。</p>
+
+<p>​   编译好之后，在./public目录下会生成站点的静态文件，我们要做的就是把./public目录和我们在github创建的仓库连接起来：</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt">1
+</span><span class="lnt">2
+</span><span class="lnt">3
+</span><span class="lnt">4
+</span><span class="lnt">5
+</span><span class="lnt">6
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell">$ <span class="nb">cd</span> public
+$ git init
+$ git remote add origin https://github.com/qsyqian/qsyqian.github.io.git
+$ git add -A
+$ git commit -m <span class="s2">&#34;first commit&#34;</span>
+$ git push -u origin master</code></pre></td></tr></table>
+</div>
+</div>
+<p>​   上述工作全部做完之后，大概过1-2分钟之后，访问自己的博客站点<code>qsyqian.github.io</code>就可以看到自己的博客站点啦。撒花~</p>
+
+<h2 id="七-换电脑了如何继续">七、换电脑了如何继续</h2>
+
+<p>​   一般上换了电脑之后，首先要clone我们的博客源文件代码仓库到本地，里面是我们写的博客的md文件的源文件；此外在该目录下clone我们的qsyqian.github.io仓库到该源码仓库的根目录下，并重命名为public。</p>
+
+<p>​   然后就可以按照上述步骤新建博客，生成博客，发布博客了。</p>
+<div class="highlight"><div class="chroma">
+<table class="lntable"><tr><td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="lnt"> 1
+</span><span class="lnt"> 2
+</span><span class="lnt"> 3
+</span><span class="lnt"> 4
+</span><span class="lnt"> 5
+</span><span class="lnt"> 6
+</span><span class="lnt"> 7
+</span><span class="lnt"> 8
+</span><span class="lnt"> 9
+</span><span class="lnt">10
+</span></code></pre></td>
+<td class="lntd">
+<pre class="chroma"><code class="language-shell" data-lang="shell"><span class="c1"># git clone git@github.com:qsyqian/blog.git</span>
+<span class="c1"># cd blog</span>
+<span class="c1"># git clone git@github.com:qsyqian/qsyqian.github.io.git</span>
+<span class="c1"># mv qsyqian.github.io public</span>
+<span class="c1"># hugo new post/xxx.md</span>
+<span class="c1"># ....edit xxx.md....</span>
+<span class="c1"># hugo server --theme=jane  #本地预览</span>
+<span class="c1"># hugo --theme=jane  #编译博客</span>
+<span class="c1"># 在blog目录下git add . &amp;&amp; git commit &amp;&amp; git push,源码文件要push到远程</span>
+<span class="c1"># 在public目录下git add . &amp;&amp; git commit &amp;&amp; git push，生成的博客静态文件要push到远程</span></code></pre></td></tr></table>
+</div>
+</div>
+<h2 id="八-参考链接">八、参考链接</h2>
+
+<ol>
+<li><a href="https://www.gohugo.org/" target="_blank">https://www.gohugo.org/</a></li>
+<li><a href="https://github.com/gohugoio/hugo/releases" target="_blank">https://github.com/gohugoio/hugo/releases</a></li>
+<li><a href="https://www.zhihu.com/question/266175192" target="_blank">https://www.zhihu.com/question/266175192</a></li>
+<li><a href="https://github.com/xianmin/hugo-theme-jane" target="_blank">https://github.com/xianmin/hugo-theme-jane</a></li>
+<li><a href="https://pages.github.com/" target="_blank">https://pages.github.com/</a></li>
+</ol>
+]]></content>
+            
+            
+            
+            
+            
+                
+                    
+                
+                    
+                
+            
+        </entry>
+    
+</feed>
